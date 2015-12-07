@@ -1,163 +1,103 @@
 <?xml version="1.0" encoding="utf-8"?>
 <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@color/grey_nav_background">
 
-    <LinearLayout
+    <FrameLayout
         android:id="@+id/name_layout"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_alignParentTop="true"
-        android:background="@color/grey_name_background"
-        android:orientation="vertical"
-        android:padding="15dp">
+        android:foreground="?android:attr/selectableItemBackground">
 
-        <org.edx.mobile.view.custom.ETextView
-            android:id="@+id/name_tv"
-            style="@style/regular_white_text"
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:gravity="left|start|center_vertical"
-            android:inputType="textCapWords"
-            android:maxWidth="200dp"
-            android:paddingTop="10dp"
-            android:textSize="20sp"
-            tools:text="Username"
-            tools:targetApi="17" />
+            android:background="@color/grey_name_background"
+            android:gravity="center"
+            android:orientation="horizontal"
+            android:padding="@dimen/edx_margin">
 
-        <org.edx.mobile.view.custom.ETextView
-            android:id="@+id/email_tv"
-            style="@style/regular_white_text"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:gravity="left|start"
-            android:maxWidth="200dp"
-            android:paddingBottom="5dp"
-            android:paddingTop="5dp"
-            android:textSize="13sp"
-            tools:text="user@domain.com"
-            tools:targetApi="17" />
-    </LinearLayout>
+            <de.hdodenhof.circleimageview.CircleImageView
+                android:id="@+id/profile_image"
+                style="@style/profile_image"
+                android:layout_width="@dimen/drawer_profile_image_diameter"
+                android:layout_height="@dimen/drawer_profile_image_diameter"
+                android:layout_marginEnd="@dimen/edx_margin"
+                android:layout_marginRight="@dimen/edx_margin"
+                app:civ_border_width="@dimen/drawer_profile_image_border_width"
+                tools:src="@drawable/app_icon" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+
+                <org.edx.mobile.view.custom.ETextView
+                    android:id="@+id/name_tv"
+                    style="@style/regular_white_text"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textSize="@dimen/drawer_username_text"
+                    tools:targetApi="17"
+                    tools:text="username" />
+
+                <org.edx.mobile.view.custom.ETextView
+                    android:id="@+id/email_tv"
+                    style="@style/regular_white_text"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:paddingTop="@dimen/widget_margin"
+                    android:textSize="@dimen/drawer_email_text"
+                    tools:text="user@domain.com" />
+            </LinearLayout>
+        </LinearLayout>
+    </FrameLayout>
 
     <LinearLayout
         android:id="@+id/button_layout"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_below="@id/name_layout"
+        android:divider="@drawable/navigation_drawer_divider"
+        android:dividerPadding="@dimen/edx_margin"
         android:orientation="vertical"
-        android:splitMotionEvents="false"
-        android:paddingBottom="10dp">
+        android:paddingBottom="@dimen/widget_margin"
+        android:showDividers="middle|end"
+        android:splitMotionEvents="false">
 
         <org.edx.mobile.view.custom.ETextView
             android:id="@+id/drawer_option_my_courses"
             style="@style/drawer_option"
-            android:layout_width="match_parent"
-            android:layout_height="@dimen/height_drawer_menu"
-            android:background="@drawable/nav_bg_selector"
-            android:gravity="center_vertical"
-            android:paddingBottom="10dp"
-            android:paddingLeft="15dp"
-            android:paddingRight="15dp"
-            android:paddingTop="10dp"
-            android:text="@string/label_my_courses"
-            android:textAllCaps="true"
-            android:textSize="14sp" />
-
-        <include layout="@layout/divider_drawer_options" />
+            android:text="@string/label_my_courses" />
 
         <org.edx.mobile.view.custom.ETextView
             android:id="@+id/drawer_option_my_videos"
             style="@style/drawer_option"
-            android:layout_width="match_parent"
-            android:layout_height="@dimen/height_drawer_menu"
-            android:background="@drawable/nav_bg_selector"
-            android:gravity="center_vertical"
-            android:paddingBottom="10dp"
-            android:paddingLeft="15dp"
-            android:paddingRight="15dp"
-            android:paddingTop="10dp"
-            android:text="@string/label_my_videos"
-            android:textAllCaps="true"
-            android:textSize="14sp" />
+            android:text="@string/label_my_videos" />
 
-        <include layout="@layout/divider_drawer_options" />
-
-        <LinearLayout
-            android:id="@+id/panel_option_find_courses"
-            android:orientation="vertical"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content">
-
-            <org.edx.mobile.view.custom.ETextView
-                android:id="@+id/drawer_option_find_courses"
-                style="@style/drawer_option"
-                android:layout_width="match_parent"
-                android:layout_height="@dimen/height_drawer_menu"
-                android:background="@drawable/nav_bg_selector"
-                android:gravity="center_vertical"
-                android:paddingBottom="10dp"
-                android:paddingLeft="15dp"
-                android:paddingRight="15dp"
-                android:paddingTop="10dp"
-                android:text="@string/label_find_courses"
-                android:textAllCaps="true"
-                android:textSize="14sp" />
-
-            <include layout="@layout/divider_drawer_options" />
-        </LinearLayout>
+        <org.edx.mobile.view.custom.ETextView
+            android:id="@+id/drawer_option_find_courses"
+            style="@style/drawer_option"
+            android:text="@string/label_find_courses" />
 
         <org.edx.mobile.view.custom.ETextView
             android:id="@+id/drawer_option_my_groups"
             style="@style/drawer_option"
-            android:layout_width="match_parent"
-            android:layout_height="@dimen/height_drawer_menu"
-            android:background="@drawable/nav_bg_selector"
-            android:gravity="center_vertical"
-            android:paddingBottom="10dp"
-            android:paddingLeft="15dp"
-            android:paddingRight="15dp"
-            android:paddingTop="10dp"
-            android:text="@string/label_my_groups"
-            android:textAllCaps="true"
-            android:textSize="14sp" />
-
-        <include layout="@layout/divider_drawer_options" />
+            android:text="@string/label_my_groups" />
 
         <org.edx.mobile.view.custom.ETextView
             android:id="@+id/drawer_option_my_settings"
             style="@style/drawer_option"
-            android:layout_width="match_parent"
-            android:layout_height="@dimen/height_drawer_menu"
-            android:background="@drawable/nav_bg_selector"
-            android:gravity="center_vertical"
-            android:paddingBottom="10dp"
-            android:paddingLeft="15dp"
-            android:paddingRight="15dp"
-            android:paddingTop="10dp"
-            android:text="@string/label_settings"
-            android:textAllCaps="true"
-            android:textSize="14sp" />
-
-        <include layout="@layout/divider_drawer_options" />
+            android:text="@string/label_settings" />
 
         <org.edx.mobile.view.custom.ETextView
             android:id="@+id/drawer_option_submit_feedback"
             style="@style/drawer_option"
-            android:layout_width="match_parent"
-            android:layout_height="@dimen/height_drawer_menu"
-            android:background="@drawable/nav_bg_selector"
-            android:gravity="center_vertical"
-            android:paddingBottom="10dp"
-            android:paddingLeft="15dp"
-            android:paddingRight="15dp"
-            android:paddingTop="10dp"
-            android:text="@string/label_submit_feedback"
-            android:textAllCaps="true"
-            android:textSize="14sp" />
-
-        <include layout="@layout/divider_drawer_options" />
+            android:text="@string/label_submit_feedback" />
 
     </LinearLayout>
 

@@ -15,7 +15,6 @@ import org.edx.mobile.module.analytics.ISegment;
 import org.edx.mobile.module.prefs.PrefManager;
 import org.edx.mobile.util.AppConstants;
 import org.edx.mobile.view.custom.EButton;
-import org.edx.mobile.view.custom.ETextView;
 
 public class LaunchActivity extends BaseFragmentActivity {
 
@@ -42,10 +41,7 @@ public class LaunchActivity extends BaseFragmentActivity {
             overridePendingTransition(R.anim.no_transition,R.anim.slide_out_to_bottom);
         }
 
-        //The onTick method need not be run in the LaunchActivity
-        runOnTick = false;
-
-        ETextView sign_in_tv = (ETextView) findViewById(R.id.sign_in_tv);
+        EButton sign_in_tv = (EButton) findViewById(R.id.sign_in_tv);
         sign_in_tv.setOnClickListener(new OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -66,12 +62,7 @@ public class LaunchActivity extends BaseFragmentActivity {
             }
         });
 
-        try {
-            environment.getSegment().screenViewsTracking(ISegment.Values.LAUNCH_ACTIVITY);
-        } catch(Exception e) {
-            logger.error(e);
-        }
-
+        environment.getSegment().trackScreenView(ISegment.Screens.LAUNCH_ACTIVITY);
     }
 
     @Override
@@ -103,7 +94,7 @@ public class LaunchActivity extends BaseFragmentActivity {
 
 
     @Override
-    public boolean onCreateOptionsMenu(Menu menu) {
+    protected boolean createOptionsMenu(Menu menu) {
         // Launch screen doesn't have any menu
         return true;
     }

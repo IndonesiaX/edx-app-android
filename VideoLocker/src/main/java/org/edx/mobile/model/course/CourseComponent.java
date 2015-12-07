@@ -1,8 +1,13 @@
 package org.edx.mobile.model.course;
 
+import android.text.TextUtils;
+
+import org.edx.mobile.R;
+import org.edx.mobile.base.MainApplication;
 import org.edx.mobile.logger.Logger;
 import org.edx.mobile.model.Filter;
 import org.edx.mobile.model.api.IPathNode;
+import org.edx.mobile.module.storage.IStorage;
 
 import java.util.ArrayList;
 import java.util.EnumSet;
@@ -19,7 +24,7 @@ public class CourseComponent implements IBlock, IPathNode {
     private BlockType type;
     private String name;
     private boolean graded;
-    private boolean responsiveUI;
+    private boolean multiDevice;
     private String blockUrl;
     private String webUrl;
     private BlockCount blockCount;
@@ -41,11 +46,11 @@ public class CourseComponent implements IBlock, IPathNode {
         this.type = blockModel.type;
         this.name = blockModel.displayName;
         this.graded = blockModel.graded;
-        this.blockUrl = blockModel.blockUrl;
-        this.webUrl = blockModel.webUrl;
-        this.responsiveUI =  blockModel.responsiveUI;
+        this.blockUrl = blockModel.studentViewUrl;
+        this.webUrl = blockModel.lmsWebUrl;
+        this.multiDevice =  blockModel.studentViewMultiDevice;
         this.format = blockModel.format;
-        this.blockCount = blockModel.blockCount == null ? new BlockCount() : blockModel.blockCount;
+        this.blockCount = blockModel.blockCounts == null ? new BlockCount() : blockModel.blockCounts;
         this.parent = parent;
         if ( parent == null){
             this.root = this;
@@ -78,6 +83,9 @@ public class CourseComponent implements IBlock, IPathNode {
 
     @Override
     public String getDisplayName() {
+        if (TextUtils.isEmpty(name)) {
+            return MainApplication.instance().getString(R.string.untitled_block);
+        }
         return name;
     }
 
@@ -142,16 +150,16 @@ public class CourseComponent implements IBlock, IPathNode {
     }
 
 
-    public boolean isResponsiveUI() {
-        return responsiveUI;
+    public boolean isMultiDevice() {
+        return multiDevice;
     }
 
-    public void setResponsiveUI(boolean responsiveUI) {
-        this.responsiveUI = responsiveUI;
+    public void setMultiDevice(boolean multiDevice) {
+        this.multiDevice = multiDevice;
     }
 
     public boolean isContainer(){
-        return children != null && children.size() > 0;
+        return type != null ? type.isContainer() : (children != null && children.size() > 0);
     }
 
     /**
@@ -202,6 +210,7 @@ public class CourseComponent implements IBlock, IPathNode {
         }
         return null;
     }
+
     /**
      * return all videos blocks under this node
      */
@@ -221,6 +230,24 @@ public class CourseComponent implements IBlock, IPathNode {
             }
         }
         return (List)videos;
+    }
+
+    /**
+     * Returns the count of videos that have the boolean
+     * {@link org.edx.mobile.model.db.DownloadEntry#isVideoForWebOnly} set to <code>false</code>
+     *
+     * @param storage The local storage object to look into
+     * @return The count of videos that are downloadable
+     */
+    public int getDownloadableVideosCount(IStorage storage) {
+        int downloadableCount = 0;
+        List<HasDownloadEntry> videos = getVideos();
+        for (int i = 0, size = videos.size(); i < size; i++) {
+            if (!videos.get(i).getDownloadEntry(storage).isVideoForWebOnly()) {
+                downloadableCount++;
+            }
+        }
+        return downloadableCount;
     }
 
     /**
@@ -322,9 +349,11 @@ public class CourseComponent implements IBlock, IPathNode {
         return  getType().name().toLowerCase(Locale.ENGLISH);
     }
 
-    @Override
-    public String getName() {
-        return  getDisplayName();
+    /**
+     * Not meant to be user facing. See {@link #getDisplayName()}
+     */
+    public String getInternalName() {
+        return name;
     }
 
     @Override

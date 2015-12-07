@@ -5,7 +5,6 @@ import android.app.Activity;
 import android.content.Intent;
 import android.content.pm.ActivityInfo;
 import android.content.res.Configuration;
-import android.content.res.Resources;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.ColorDrawable;
@@ -22,11 +21,8 @@ import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
-import android.view.Window;
-import android.view.WindowManager;
 import android.view.animation.Animation;
 import android.view.animation.AnimationUtils;
-import android.view.animation.TranslateAnimation;
 import android.webkit.WebView;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
@@ -35,24 +31,19 @@ import android.widget.TextView;
 import org.edx.mobile.R;
 import org.edx.mobile.base.BaseFragmentActivity;
 import org.edx.mobile.event.FlyingMessageEvent;
-import org.edx.mobile.model.db.DownloadEntry;
-import org.edx.mobile.module.db.IDatabase;
-import org.edx.mobile.module.db.impl.DatabaseFactory;
 import org.edx.mobile.module.prefs.PrefManager;
-import org.edx.mobile.test.http.HttpBaseTestCase;
-import org.edx.mobile.util.AppConstants;
 import org.edx.mobile.util.NetworkUtil;
 import org.edx.mobile.view.dialog.WebViewDialogFragment;
 import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.Mockito;
 import org.robolectric.Robolectric;
-import org.robolectric.RobolectricGradleTestRunner;
+import org.robolectric.RuntimeEnvironment;
 import org.robolectric.Shadows;
 import org.robolectric.annotation.Config;
 import org.robolectric.shadows.ShadowActivity;
-import org.robolectric.shadows.ShadowView;
+import org.robolectric.shadows.ShadowApplication;
+import org.robolectric.shadows.ShadowWebView;
 import org.robolectric.util.ActivityController;
+import org.robolectric.util.Scheduler;
 
 import de.greenrobot.event.EventBus;
 
@@ -63,8 +54,7 @@ import static org.junit.Assert.*;
 import static org.junit.Assume.*;
 
 // TODO: Test network connectivity change events too, after we manage to mock them
-@RunWith(RobolectricGradleTestRunner.class)
-public class BaseFragmentActivityTest extends HttpBaseTestCase {
+public abstract class BaseFragmentActivityTest extends UiTest {
     /**
      * Method for defining the subclass of {@link BaseFragmentActivity} that
      * is being tested. Should be overridden by subclasses.
@@ -76,21 +66,23 @@ public class BaseFragmentActivityTest extends HttpBaseTestCase {
     }
 
     /**
+     * Method for constructing the {link Intent} to be used to start the
+     * {link Activity} instance. Should be overridden by subclasses to
+     * attach any additional data to be passed.
+     *
+     * @return The {@link Intent} used to start the {link Activity}
+     */
+    protected Intent getIntent() {
+        return new Intent(RuntimeEnvironment.application, getActivityClass());
+    }
+
+    /**
      * Method for defining whether the activity has a drawer configured
      *
      * @return true if the drawer is configured
      */
     protected boolean hasDrawer() {
         return false;
-    }
-
-    /**
-     * Method for defining whether the onTick() method is called periodically
-     *
-     * @return true if onTick() is called
-     */
-    protected boolean runsOnTick() {
-        return true;
     }
 
     /**
@@ -110,7 +102,8 @@ public class BaseFragmentActivityTest extends HttpBaseTestCase {
     @Config(sdk = Build.VERSION_CODES.JELLY_BEAN_MR2)
     public void updateActionBarShadowTest() {
         BaseFragmentActivity activity =
-                Robolectric.buildActivity(getActivityClass()).create().get();
+                Robolectric.buildActivity(getActivityClass())
+                        .withIntent(getIntent()).create().get();
 
         // Get the content view
         View contentView = activity.findViewById(android.R.id.content);
@@ -132,29 +125,6 @@ public class BaseFragmentActivityTest extends HttpBaseTestCase {
     }
 
     /**
-     * Testing full screen mode in landscape
-     */
-    @Test
-    @Config(qualifiers = "land")
-    public void landscapeFullscreenTest() {
-        ActivityController<? extends BaseFragmentActivity> controller =
-                Robolectric.buildActivity(getActivityClass());
-        BaseFragmentActivity activity = controller.get();
-        activity.getResources().getConfiguration().orientation =
-                Configuration.ORIENTATION_LANDSCAPE;
-        controller.create();
-        Resources.Theme theme = activity.getTheme();
-        TypedValue tv = new TypedValue();
-        assertTrue(theme.resolveAttribute(android.R.attr.windowContentOverlay, tv, true));
-        assertEquals(TypedValue.TYPE_NULL, tv.type);
-        controller.start();
-        Window window = activity.getWindow();
-        int windowAttributes = window.getAttributes().flags;
-        assertTrue((windowAttributes & WindowManager.LayoutParams.FLAG_FULLSCREEN) > 0);
-        assertTrue(window.hasFeature(Window.FEATURE_NO_TITLE));
-    }
-
-    /**
      * Generic method to assert action bar visibility state on a specified orientation
      *
      * @param orientation The orientation it should be tested on
@@ -162,7 +132,7 @@ public class BaseFragmentActivityTest extends HttpBaseTestCase {
      */
     private void assertActionBarShowing(int orientation, boolean expected) {
         ActivityController<? extends BaseFragmentActivity> controller =
-                Robolectric.buildActivity(getActivityClass());
+                Robolectric.buildActivity(getActivityClass()).withIntent(getIntent());
         BaseFragmentActivity activity = controller.get();
         activity.getResources().getConfiguration().orientation = orientation;
         controller.create().start();
@@ -205,21 +175,11 @@ public class BaseFragmentActivityTest extends HttpBaseTestCase {
     }
 
     /**
-     * Assert pending transition animation override with custom slide animation
-     *
-     * @param shadowActivity The shadow activity
-     */
-    private void assertAppliedTransitionNext(ShadowActivity shadowActivity) {
-        assertOverridePendingTransition(shadowActivity,
-                R.anim.slide_in_from_end, R.anim.slide_out_to_start);
-    }
-
-    /**
      * Assert previous transition animation override with custom slide animation
      *
      * @param shadowActivity The shadow activity
      */
-    private void assertAppliedTransitionPrev(ShadowActivity shadowActivity) {
+    public void assertAppliedTransitionPrev(ShadowActivity shadowActivity) {
         assertOverridePendingTransition(shadowActivity,
                 R.anim.slide_in_from_start, R.anim.slide_out_to_end);
     }
@@ -230,18 +190,14 @@ public class BaseFragmentActivityTest extends HttpBaseTestCase {
     @Test
     public void lifecycleTest() {
         ActivityController<? extends BaseFragmentActivity> controller =
-                Robolectric.buildActivity(getActivityClass());
+                Robolectric.buildActivity(getActivityClass()).withIntent(getIntent());
         BaseFragmentActivity activity = controller.get();
         ShadowActivity shadowActivity = Shadows.shadowOf(activity);
 
-        controller.create();
-        // Check custom transition animation override
-        assertAppliedTransitionNext(shadowActivity);
-
-        controller.start();
+        controller.create().start();
         // Social features state persistence
         PrefManager pmFeatures = new PrefManager(activity, PrefManager.Pref.FEATURES);
-        assertEquals(NetworkUtil.isSocialFeatureFlagEnabled(activity, Mockito.mock(org.edx.mobile.util.Config.class)),
+        assertEquals(NetworkUtil.isSocialFeatureFlagEnabled(activity, config),
                 pmFeatures.getBoolean(PrefManager.Key.ALLOW_SOCIAL_FEATURES, false));
         // Action bar state initialization
         ActionBar bar = activity.getActionBar();
@@ -290,18 +246,15 @@ public class BaseFragmentActivityTest extends HttpBaseTestCase {
         }
 
         // Action bar home button
-        shadowActivity.clickMenuItem(android.R.id.home);
+        assertTrue(shadowActivity.clickMenuItem(android.R.id.home));
         if (hasDrawer) {
             assertNotNull(mDrawerLayout);
             assertTrue(mDrawerLayout.isDrawerOpen(Gravity.START));
-            shadowActivity.clickMenuItem(android.R.id.home);
+            assertTrue(shadowActivity.clickMenuItem(android.R.id.home));
             assertFalse(mDrawerLayout.isDrawerOpen(Gravity.START));
             activity.finish();
         }
         assertThat(activity).isFinishing();
-
-        // Check custom transition animation override
-        assertAppliedTransitionPrev(shadowActivity);
     }
 
     /**
@@ -310,20 +263,13 @@ public class BaseFragmentActivityTest extends HttpBaseTestCase {
     @Test
     public void initializeOptionsMenuTest() {
         BaseFragmentActivity activity =
-                Robolectric.setupActivity(getActivityClass());
+                Robolectric.buildActivity(getActivityClass())
+                        .withIntent(getIntent()).setup().get();
         Menu menu = Shadows.shadowOf(activity).getOptionsMenu();
         assertNotNull(menu);
         MenuItem offlineItem = menu.findItem(R.id.offline);
+        assertNotNull(offlineItem);
         assertThat(offlineItem).hasTitle(activity.getText(R.string.offline_text));
-        // Can't see any method to confirm action layout source as well
-        MenuItem progressItem = menu.findItem(R.id.progress_download);
-        assertThat(progressItem).hasTitle(activity.getText(R.string.action_settings));
-        MenuItem deleteItem = menu.findItem(R.id.delete_checkbox);
-        assertThat(deleteItem).hasTitle(activity.getText(R.string.label_delete));
-        MenuItem doneItem = menu.findItem(R.id.done_btn);
-        assertThat(doneItem).hasTitle(activity.getText(R.string.done_text));
-        MenuItem unreadDisplayItem = menu.findItem(R.id.unread_display);
-        assertThat(unreadDisplayItem).hasTitle(activity.getText(R.string.unread_text));
     }
 
     /**
@@ -345,7 +291,7 @@ public class BaseFragmentActivityTest extends HttpBaseTestCase {
         assertThat(titleTextView).hasCurrentTextColor(
                 activity.getResources().getColor(R.color.edx_white));
         assertEquals(type, titleTextView.getTypeface());
-        assertThat(bar).hasTitle(title);
+        assertThat(bar).hasTitle("  " + title);
     }
 
     /**
@@ -354,7 +300,8 @@ public class BaseFragmentActivityTest extends HttpBaseTestCase {
     @Test
     public void setTitleTest() {
         BaseFragmentActivity activity =
-                Robolectric.buildActivity(getActivityClass()).create().get();
+                Robolectric.buildActivity(getActivityClass())
+                        .withIntent(getIntent()).create().get();
         CharSequence title = "test";
         activity.setTitle(title);
         assertTitle(activity, title);
@@ -364,18 +311,30 @@ public class BaseFragmentActivityTest extends HttpBaseTestCase {
      * Generic method for asserting view animation method functionality
      *
      * @param view The animated view
+     * @param trigger A {@link Runnable} that triggers the animation
      */
-    protected void assertAnimateLayouts(View view) {
+    protected void assertAnimateLayouts(View view, Runnable trigger) {
+        // The foreground scheduler needs to be paused so that the
+        // temporary visibility of the animated View can be verified.
+        Scheduler foregroundScheduler = ShadowApplication.getInstance()
+                .getForegroundThreadScheduler();
+        boolean wasPaused = foregroundScheduler.isPaused();
+        if (!wasPaused) {
+            foregroundScheduler.pause();
+        }
+        assertThat(view).isGone();
+        trigger.run();
         assertThat(view).isVisible();
         Animation animation = view.getAnimation();
         assertNotNull(animation);
         assertThat(animation.getStartTime())
                 .isLessThanOrEqualTo(AnimationUtils.currentAnimationTimeMillis());
-        assertThat(animation)
-                .hasStartOffset(0)
-                .isExactlyInstanceOf(TranslateAnimation.class);
-        TranslateAnimation translateAnimation = (TranslateAnimation) animation;
-        assertThat(translateAnimation).hasDuration(500).isFillingAfter();
+        assertThat(animation).hasStartOffset(0);
+        foregroundScheduler.unPause();
+        assertThat(view).isGone();
+        if (wasPaused) {
+            foregroundScheduler.pause();
+        }
     }
 
     /**
@@ -383,14 +342,20 @@ public class BaseFragmentActivityTest extends HttpBaseTestCase {
      */
     @Test
     public void animateLayoutsTest() {
-        BaseFragmentActivity activity =
-                Robolectric.buildActivity(getActivityClass()).create().get();
-        View view = new View(activity);
+        final BaseFragmentActivity activity =
+                Robolectric.buildActivity(getActivityClass())
+                        .withIntent(getIntent()).setup().get();
+        final View view = new View(activity);
         view.setVisibility(View.GONE);
-        activity.setContentView(view);
-        assertThat(view).isGone();
-        activity.animateLayouts(view);
-        assertAnimateLayouts(view);
+        activity.addContentView(view, new ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT));
+        assertAnimateLayouts(view, new Runnable() {
+            @Override
+            public void run() {
+                activity.animateLayouts(view);
+            }
+        });
         activity.stopAnimation(view);
         assertThat(view).hasAnimation(null);
     }
@@ -400,14 +365,21 @@ public class BaseFragmentActivityTest extends HttpBaseTestCase {
      *
      * @param activity The activity instance
      * @param message The message that is expected to be displayed
+     * @param trigger A {@link Runnable} that triggers the showing of the
+     *                message
      */
-    protected void assertShowInfoMessage(
-            BaseFragmentActivity activity, String message) {
-        TextView messageView = (TextView)
+    protected void assertShowInfoMessage(final BaseFragmentActivity activity,
+            final String message, final Runnable trigger) {
+        final TextView messageView = (TextView)
                 activity.findViewById(R.id.downloadMessage);
         assumeNotNull(messageView);
-        assertThat(messageView).hasText(message);
-        assertAnimateLayouts(messageView);
+        assertAnimateLayouts(messageView, new Runnable() {
+            @Override
+            public void run() {
+                trigger.run();
+                assertThat(messageView).hasText(message);
+            }
+        });
     }
 
     /**
@@ -415,16 +387,23 @@ public class BaseFragmentActivityTest extends HttpBaseTestCase {
      */
     @Test
     public void showInfoMessageTest() {
-        BaseFragmentActivity activity =
-                Robolectric.buildActivity(getActivityClass()).create().get();
+        final BaseFragmentActivity activity =
+                Robolectric.buildActivity(getActivityClass())
+                        .withIntent(getIntent()).setup().get();
         TextView messageView = new TextView(activity);
         messageView.setId(R.id.downloadMessage);
         messageView.setVisibility(View.GONE);
-        activity.setContentView(messageView);
-        assertThat(messageView).hasText("").isGone();
-        String message = "test";
-        assumeTrue(activity.showInfoMessage(message));
-        assertShowInfoMessage(activity, message);
+        activity.addContentView(messageView, new ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT));
+        assertThat(messageView).hasText("");
+        final String message = "test";
+        assertShowInfoMessage(activity, message, new Runnable() {
+            @Override
+            public void run() {
+                assumeTrue(activity.showInfoMessage(message));
+            }
+        });
     }
 
     /**
@@ -432,15 +411,21 @@ public class BaseFragmentActivityTest extends HttpBaseTestCase {
      */
     @Test
     public void showOfflineAccessMessage() {
-        BaseFragmentActivity activity =
-                Robolectric.buildActivity(getActivityClass()).create().get();
+        final BaseFragmentActivity activity =
+                Robolectric.buildActivity(getActivityClass())
+                        .withIntent(getIntent()).setup().get();
         View offlineView = new View(activity);
         offlineView.setId(R.id.offline_access_panel);
         offlineView.setVisibility(View.GONE);
-        activity.setContentView(offlineView);
-        assertThat(offlineView).isGone();
-        activity.showOfflineAccessMessage();
-        assertAnimateLayouts(offlineView);
+        activity.addContentView(offlineView, new ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT));
+        assertAnimateLayouts(offlineView, new Runnable() {
+            @Override
+            public void run() {
+                activity.showOfflineAccessMessage();
+            }
+        });
     }
 
     /**
@@ -450,11 +435,10 @@ public class BaseFragmentActivityTest extends HttpBaseTestCase {
     public void applyPrevTransitionOnRestartTest() {
         assumeTrue(appliesPrevTransitionOnRestart());
         ActivityController<? extends BaseFragmentActivity> controller =
-                Robolectric.buildActivity(getActivityClass()).create().start();
-        ShadowActivity shadowActivity = Shadows.shadowOf(controller.get());
-        assertAppliedTransitionNext(shadowActivity);
-        controller.stop().start().resume();
-        assertAppliedTransitionPrev(shadowActivity);
+                Robolectric.buildActivity(getActivityClass())
+                        .withIntent(getIntent()).create().start()
+                        .stop().start().resume();
+        assertAppliedTransitionPrev(Shadows.shadowOf(controller.get()));
     }
 
     /**
@@ -464,69 +448,34 @@ public class BaseFragmentActivityTest extends HttpBaseTestCase {
      * @param currentActivity The current activity
      * @param nextActivityClass The class of the newly started activity
      */
-    protected void assertNextStartedActivity(BaseFragmentActivity currentActivity,
+    protected Intent assertNextStartedActivity(BaseFragmentActivity currentActivity,
             Class<? extends Activity> nextActivityClass) {
         ShadowActivity shadowActivity = Shadows.shadowOf(currentActivity);
-        Intent intent = shadowActivity.peekNextStartedActivity();
+        Intent intent = shadowActivity.getNextStartedActivity();
+        assertNotNull(intent);
         assertThat(intent).hasComponent(currentActivity, nextActivityClass);
-        assertAppliedTransitionNext(shadowActivity);
+        return intent;
     }
 
     /**
-     * Testing download progress menu visibility states and click behaviour
-     * (starting DownloadActivity). Only when both AppConstants.offline_flag
-     * is true and there is a downloading entry in the database, should the
-     * progress bar be visible.
+     * Generic method for asserting next started activity along with
+     * the custom transition animation override
+     *
+     * @param currentActivity The current activity
+     * @param nextActivityClass The class of the newly started activity
+     * @param requestCode The request code
      */
-    @Test
-    public void downloadProgressViewTest() {
-        assumeTrue(runsOnTick());
-
-        AppConstants.offline_flag = false;
-        assertFalse(Shadows.shadowOf(Robolectric.setupActivity(getActivityClass()))
-                .getOptionsMenu()
-                .findItem(R.id.progress_download)
-                .isVisible());
-
-        AppConstants.offline_flag = true;
-        assertFalse(Shadows.shadowOf(Robolectric.setupActivity(getActivityClass()))
-                .getOptionsMenu()
-                .findItem(R.id.progress_download)
-                .isVisible());
-
-        IDatabase db = DatabaseFactory.getInstance(DatabaseFactory.TYPE_DATABASE_NATIVE);
-        DownloadEntry de = new DownloadEntry();
-        de.username = "unittest";
-        de.title = "title";
-        de.videoId = "videoId-" + System.currentTimeMillis();
-        de.size = 1024;
-        de.duration = 3600;
-        de.filepath = "/fakepath";
-        de.url = "http://fake/url";
-        de.eid = "fake_eid";
-        de.chapter = "fake_chapter";
-        de.section = "fake_section";
-        de.lastPlayedOffset = 0;
-        de.lmsUrl = "http://fake/lms/url";
-        de.isCourseActive = 1;
-        de.downloaded = DownloadEntry.DownloadedState.DOWNLOADING;
-        Long rowId = db.addVideoData(de, null);
-        assertNotNull(rowId);
-        assertThat(rowId).isGreaterThan(0);
-        assertFalse(Shadows.shadowOf(Robolectric.setupActivity(getActivityClass()))
-                .getOptionsMenu()
-                .findItem(R.id.progress_download)
-                .isVisible());
-
-        AppConstants.offline_flag = false;
-        BaseFragmentActivity activity =
-                Robolectric.setupActivity(getActivityClass());
-        MenuItem progressItem = Shadows.shadowOf(activity)
-                .getOptionsMenu()
-                .findItem(R.id.progress_download);
-        assertTrue(progressItem.isVisible());
-        assertTrue(ShadowView.clickOn(progressItem.getActionView()));
-        assertNextStartedActivity(activity, DownloadListActivity.class);
+    protected Intent assertNextStartedActivityForResult(
+            BaseFragmentActivity currentActivity,
+            Class<? extends Activity> nextActivityClass, int requestCode) {
+        ShadowActivity shadowActivity = Shadows.shadowOf(currentActivity);
+        ShadowActivity.IntentForResult intentForResult =
+                shadowActivity.getNextStartedActivityForResult();
+        assertNotNull(intentForResult);
+        assertThat(intentForResult.intent).hasComponent(
+                currentActivity, nextActivityClass);
+        assertEquals(requestCode, intentForResult.requestCode);
+        return intentForResult.intent;
     }
 
     /**
@@ -539,7 +488,7 @@ public class BaseFragmentActivityTest extends HttpBaseTestCase {
      */
     protected static void showWebDialogTest(BaseFragmentActivity activity,
             String url, boolean showTitle, String title) {
-        activity.showWebDialog(url, true, title);
+        activity.showWebDialog(url, showTitle, title);
         FragmentManager fragmentManager = activity.getSupportFragmentManager();
         fragmentManager.executePendingTransactions();
         Fragment webViewFragment = fragmentManager.findFragmentByTag("web-view-dialog");
@@ -552,11 +501,15 @@ public class BaseFragmentActivityTest extends HttpBaseTestCase {
         assertNotNull(dialogView);
         WebView webView = (WebView) dialogView.findViewById(R.id.eula_webView);
         assertNotNull(webView);
-        assertThat(webView).hasUrl(url);
+        ShadowWebView shadowWebView = Shadows.shadowOf(webView);
+        assertEquals(shadowWebView.getLastLoadedUrl(), url);
         TextView titleView = (TextView) dialogView.findViewById(R.id.tv_dialog_title);
         assertNotNull(titleView);
         if (showTitle) {
-            assertThat(titleView).isVisible().hasText(title);
+            assertThat(titleView).isVisible();
+            if (title != null) {
+                assertThat(titleView).hasText(title);
+            }
         } else {
             assertThat(titleView).isNotVisible();
         }
@@ -570,7 +523,8 @@ public class BaseFragmentActivityTest extends HttpBaseTestCase {
     @Test
     public void showWebDialogTest() {
         BaseFragmentActivity activity =
-                Robolectric.setupActivity(getActivityClass());
+                Robolectric.buildActivity(getActivityClass())
+                        .withIntent(getIntent()).setup().get();
         String url = "https://www.edx.org";
         String title = "title";
         showWebDialogTest(activity, url, true, title);
@@ -585,14 +539,19 @@ public class BaseFragmentActivityTest extends HttpBaseTestCase {
     @Test
     public void infoFlyingMessageDisplayTest() {
         BaseFragmentActivity activity =
-                Robolectric.setupActivity(getActivityClass());
+                Robolectric.buildActivity(getActivityClass())
+                        .withIntent(getIntent()).setup().get();
         assumeNotNull(activity.findViewById(R.id.downloadMessage));
-        String message = "message";
-        EventBus eventBus = EventBus.getDefault();
-        assertNull(eventBus.getStickyEvent(FlyingMessageEvent.class));
-        eventBus.postSticky(new FlyingMessageEvent(message));
-        assertNull(eventBus.getStickyEvent(FlyingMessageEvent.class));
-        assertShowInfoMessage(activity, message);
+        final String message = "message";
+        assertShowInfoMessage(activity, message, new Runnable() {
+            @Override
+            public void run() {
+                EventBus eventBus = EventBus.getDefault();
+                assertNull(eventBus.getStickyEvent(FlyingMessageEvent.class));
+                eventBus.postSticky(new FlyingMessageEvent(message));
+                assertNull(eventBus.getStickyEvent(FlyingMessageEvent.class));
+            }
+        });
     }
 
     /**
@@ -602,33 +561,34 @@ public class BaseFragmentActivityTest extends HttpBaseTestCase {
      * @param header The message header
      * @param message The error message
      */
-    protected void errorFlyingMessageDisplayTest(BaseFragmentActivity activity,
-            String header, String message) {
-        EventBus eventBus = EventBus.getDefault();
-        assertNull(eventBus.getStickyEvent(FlyingMessageEvent.class));
-        eventBus.postSticky(new FlyingMessageEvent(
-                FlyingMessageEvent.MessageType.ERROR, header, message));
-        assertNull(eventBus.getStickyEvent(FlyingMessageEvent.class));
-
+    protected void errorFlyingMessageDisplayTest(final BaseFragmentActivity activity,
+            final String header, final String message) {
         View errorView = activity.findViewById(R.id.error_layout);
         assertNotNull(errorView);
         assertThat(errorView).isInstanceOf(ViewGroup.class);
-        TextView errorHeaderView = (TextView)
-                activity.findViewById(R.id.error_header);
-        TextView errorMessageView = (TextView)
-                activity.findViewById(R.id.error_message);
-        assertNotNull(errorHeaderView);
-        assertNotNull(errorMessageView);
-        if (TextUtils.isEmpty(header)) {
-            assertThat(errorHeaderView).isNotVisible();
-        } else {
-            assertThat(errorHeaderView).isVisible().hasText(header);
-        }
-        if (message == null) {
-            message = "";
-        }
-        assertThat(errorMessageView).hasText(message);
-        assertAnimateLayouts(errorView);
+        assertAnimateLayouts(errorView, new Runnable() {
+            @Override
+            public void run() {
+                EventBus eventBus = EventBus.getDefault();
+                assertNull(eventBus.getStickyEvent(FlyingMessageEvent.class));
+                eventBus.postSticky(new FlyingMessageEvent(
+                        FlyingMessageEvent.MessageType.ERROR, header, message));
+                assertNull(eventBus.getStickyEvent(FlyingMessageEvent.class));
+
+                TextView errorHeaderView = (TextView)
+                        activity.findViewById(R.id.error_header);
+                TextView errorMessageView = (TextView)
+                        activity.findViewById(R.id.error_message);
+                assertNotNull(errorHeaderView);
+                assertNotNull(errorMessageView);
+                if (TextUtils.isEmpty(header)) {
+                    assertThat(errorHeaderView).isNotVisible();
+                } else {
+                    assertThat(errorHeaderView).isVisible().hasText(header);
+                }
+                assertThat(errorMessageView).hasText(message == null ? "" : message);
+            }
+        });
     }
 
     /**
@@ -637,7 +597,8 @@ public class BaseFragmentActivityTest extends HttpBaseTestCase {
     @Test
     public void errorFlyingMessageDisplayTest() {
         BaseFragmentActivity activity =
-                Robolectric.setupActivity(getActivityClass());
+                Robolectric.buildActivity(getActivityClass())
+                        .withIntent(getIntent()).setup().get();
         View errorView = activity.findViewById(R.id.error_layout);
         assumeNotNull(errorView);
         assumeThat(errorView, instanceOf(ViewGroup.class));
@@ -656,7 +617,8 @@ public class BaseFragmentActivityTest extends HttpBaseTestCase {
     @Test
     public void tryToSetUIInteractionTest() {
         BaseFragmentActivity activity =
-                Robolectric.setupActivity(getActivityClass());
+                Robolectric.buildActivity(getActivityClass())
+                        .withIntent(getIntent()).setup().get();
         assertFalse(activity.tryToSetUIInteraction(true));
         assertFalse(activity.tryToSetUIInteraction(false));
     }

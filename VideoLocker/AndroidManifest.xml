@@ -71,7 +71,7 @@
 
     <application
         android:allowBackup="true"
-        android:supportsRtl="false"
+        android:supportsRtl="${supportsRtl}"
         android:icon="@drawable/app_icon"
         android:label="@string/app_name"
         android:theme="@style/CustomActionBarTheme"
@@ -110,13 +110,6 @@
             android:label="@string/app_name"
             android:screenOrientation="portrait" >
         </activity>
-        
-        <activity
-            android:name="org.edx.mobile.view.CourseDetailTabActivity"
-            android:label="@string/app_name"
-            android:screenOrientation="portrait"
-            >
-        </activity>
 
         <activity
             android:name="org.edx.mobile.view.CourseDashboardActivity"
@@ -126,6 +119,31 @@
         </activity>
         <activity
             android:name="org.edx.mobile.view.CourseOutlineActivity"
+            android:label="@string/app_name"
+            android:screenOrientation="portrait"
+            >
+        </activity>
+
+        <activity
+            android:name=".view.CourseDiscussionTopicsActivity"
+            android:label="@string/app_name"
+            android:screenOrientation="portrait"
+            >
+        </activity>
+
+        <activity android:name=".view.CourseDiscussionPostsActivity"
+            android:label="@string/app_name"
+            android:screenOrientation="portrait"
+            >
+        </activity>
+
+        <activity android:name=".view.CourseDiscussionCommentsActivity"
+            android:label="@string/app_name"
+            android:screenOrientation="portrait"
+            >
+        </activity>
+
+        <activity android:name=".view.CourseDiscussionResponsesActivity"
             android:label="@string/app_name"
             android:screenOrientation="portrait"
             >
@@ -201,6 +219,22 @@
             android:name="org.edx.mobile.view.CreateGroupActivity"
             android:label="@string/app_name"
             android:screenOrientation="portrait" />
+
+        <activity
+            android:name="org.edx.mobile.view.DiscussionAddCommentActivity"
+            android:label="@string/discussion_add_comment_title"
+            android:screenOrientation="portrait" />
+
+        <activity
+            android:name="org.edx.mobile.view.DiscussionAddResponseActivity"
+            android:label="@string/discussion_add_response_title"
+            android:screenOrientation="portrait" />
+
+        <activity
+            android:name="org.edx.mobile.view.DiscussionAddPostActivity"
+            android:label="@string/discussion_post_create_new_post"
+            android:screenOrientation="portrait" />
+
         <activity
             android:name="org.edx.mobile.view.SocialFriendPickerActivity"
             android:label="@string/app_name"
@@ -211,7 +245,7 @@
             android:screenOrientation="portrait" />
         <activity
             android:name="org.edx.mobile.view.CertificateActivity"
-            android:label="@string/app_name"
+            android:label="@string/tab_label_certificate"
             android:screenOrientation="portrait" />
         <activity
             android:name="org.edx.mobile.view.SettingsActivity"
@@ -227,6 +261,23 @@
             android:label="@string/app_name"
             android:screenOrientation="portrait"
             android:theme="@android:style/Theme.NoTitleBar"/>
+
+        <activity android:name=".view.UserProfileActivity"
+            android:screenOrientation="portrait"
+            android:theme="@style/CustomActionBarTheme.NoShadow"
+            android:label=""/>
+
+        <activity android:name=".view.EditUserProfileActivity"
+            android:screenOrientation="portrait"/>
+
+        <activity android:name=".view.FormFieldActivity"
+            android:screenOrientation="portrait"
+            android:label=""
+            android:windowSoftInputMode="adjustResize"/>
+
+        <activity android:name=".view.CropImageActivity"
+            android:screenOrientation="portrait"
+            android:label=""/>
 
         <receiver android:name="org.edx.mobile.module.download.DownloadCompleteReceiver">
             <intent-filter>
@@ -293,13 +344,6 @@
                 <category android:name="org.edx.mobile" />
             </intent-filter>
         </receiver>
-
-       <!-- Used for Flyin window of remote notification -->
-        <!--
-        <service
-            android:name=".module.notification.NotificationFlyinService"
-            android:exported="true" />
-         -->
     </application>
 
 </manifest>

@@ -20,6 +20,7 @@ import org.edx.mobile.loader.AsyncTaskResult;
 import org.edx.mobile.loader.FriendsInCourseLoader;
 import org.edx.mobile.logger.Logger;
 import org.edx.mobile.model.api.CourseEntry;
+import org.edx.mobile.module.analytics.ISegment;
 import org.edx.mobile.module.facebook.FacebookSessionUtil;
 import org.edx.mobile.social.SocialMember;
 import org.edx.mobile.util.BrowserUtil;
@@ -71,12 +72,7 @@ public class FriendsInCourseFragment extends RoboFragment implements LoaderManag
             adapter = new FriendsInCourseAdapter(getActivity());
         }
  
-        try{
-            environment.getSegment().screenViewsTracking("Friends In This Course");
-        }catch(Exception e){
-            logger.error(e);
-        }
-
+        environment.getSegment().trackScreenView(ISegment.Screens.FRIENDS_IN_COURSE);
     }
 
     @Override
@@ -97,7 +93,7 @@ public class FriendsInCourseFragment extends RoboFragment implements LoaderManag
         });
 
         courseLabel = (TextView) rootView.findViewById(R.id.course_label);
-        String content = ResourceUtil.getFormattedString(R.string.friends_in_course, "courseName", courseData.getName()).toString();
+        String content = ResourceUtil.getFormattedString(getResources(), R.string.friends_in_course, "courseName", courseData.getName()).toString();
         courseLabel.setText( content );
 
         progressBar = (ProgressBar) rootView.findViewById(R.id.progress);
@@ -112,7 +108,7 @@ public class FriendsInCourseFragment extends RoboFragment implements LoaderManag
                 @Override
                 public void onClick(View v) {
 
-                    new BrowserUtil().open(getActivity(), courseData.getCourse_url());
+                    BrowserUtil.open(getActivity(), courseData.getCourse_url());
 
                 }
             });

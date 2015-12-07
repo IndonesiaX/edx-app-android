@@ -1,6 +1,8 @@
 package org.edx.mobile.util;
 
 import android.annotation.SuppressLint;
+import android.text.format.DateUtils;
+
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.Date;
@@ -9,10 +11,12 @@ import org.edx.mobile.logger.Logger;
 @SuppressLint("SimpleDateFormat")
 public class DateUtil {
 
+    public static final String ISO_8601_DATE_TIME_FORMAT = "yyyy-MM-dd'T'HH:mm:ssZ";
+
     private static final Logger logger = new Logger(DateUtil.class.getName());
 
     /*
-     * Converting Date in string format to Date object and coverting the Current
+     * Converting Date in string format to Date object and converting the Current
      * Stamp
      */
     public static Date convertToDate(String date) {
@@ -102,5 +106,4 @@ public class DateUtil {
             return null;
         }
     }
-
 }

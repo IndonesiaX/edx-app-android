@@ -1,33 +1,30 @@
 package org.edx.mobile.view;
 
 import android.annotation.SuppressLint;
+import android.content.Intent;
 import android.graphics.drawable.Drawable;
+import android.os.Bundle;
 import android.support.v4.widget.DrawerLayout;
 import android.view.Gravity;
 import android.view.Menu;
 import android.view.MenuItem;
-import android.view.View;
 import android.widget.ProgressBar;
 
 import org.edx.mobile.R;
-import org.edx.mobile.event.DownloadEvent;
+import org.edx.mobile.http.OkHttpUtil;
+import org.edx.mobile.model.api.EnrolledCoursesResponse;
+import org.edx.mobile.model.course.CourseComponent;
 import org.edx.mobile.third_party.iconify.IconDrawable;
-import org.junit.Ignore;
 import org.junit.Test;
-import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized.Parameter;
 import org.robolectric.Robolectric;
-import org.robolectric.RobolectricGradleTestRunner;
 import org.robolectric.Shadows;
 import org.robolectric.shadows.ShadowActivity;
 import org.robolectric.util.ActivityController;
 
-import de.greenrobot.event.EventBus;
-
 import static org.assertj.android.api.Assertions.assertThat;
 import static org.junit.Assert.*;
-import static org.junit.Assume.*;
 
-@RunWith(RobolectricGradleTestRunner.class)
 public abstract class CourseBaseActivityTest extends BaseFragmentActivityTest {
     /**
      * Method for defining the subclass of {@link CourseBaseActivity} that
@@ -38,6 +35,42 @@ public abstract class CourseBaseActivityTest extends BaseFragmentActivityTest {
     @Override
     protected Class<? extends CourseBaseActivity> getActivityClass() {
         return CourseBaseActivity.class;
+    }
+
+    /**
+     * Parameterized flag for whether to provide the course ID explicitly, or
+     * allow CourseBaseActivity to fallback to loading the base course.
+     */
+    @Parameter
+    public boolean provideCourseId;
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    protected Intent getIntent() {
+        EnrolledCoursesResponse courseData;
+        try {
+            courseData = api.getEnrolledCourses().get(0);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+        Intent intent = super.getIntent();
+        Bundle extras = new Bundle();
+        extras.putSerializable(Router.EXTRA_ENROLLMENT, courseData);
+        if (provideCourseId) {
+            CourseComponent courseComponent;
+            try {
+                courseComponent = serviceManager.getCourseStructure(
+                        courseData.getCourse().getId(),
+                        OkHttpUtil.REQUEST_CACHE_TYPE.IGNORE_CACHE);
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+            extras.putString(Router.EXTRA_COURSE_COMPONENT_ID, courseComponent.getId());
+        }
+        intent.putExtra(Router.EXTRA_BUNDLE, extras);
+        return intent;
     }
 
     /**
@@ -55,16 +88,12 @@ public abstract class CourseBaseActivityTest extends BaseFragmentActivityTest {
     @SuppressLint("RtlHardcoded")
     public void initializeTest() {
         ActivityController<? extends CourseBaseActivity> controller =
-                Robolectric.buildActivity(getActivityClass());
+                Robolectric.buildActivity(getActivityClass()).withIntent(getIntent());
         CourseBaseActivity activity = controller.get();
 
         controller.create();
         assertNotNull(activity.findViewById(R.id.offline_bar));
         assertNotNull(activity.findViewById(R.id.last_access_bar));
-        assertNotNull(activity.findViewById(R.id.video_download_indicator));
-        View downloadInProgressButton =
-                activity.findViewById(R.id.download_in_progress_button);
-        assertNotNull(downloadInProgressButton);
         DrawerLayout drawerLayout = (DrawerLayout)
                 activity.findViewById(R.id.drawer_layout);
         if (drawerLayout != null) {
@@ -75,25 +104,6 @@ public abstract class CourseBaseActivityTest extends BaseFragmentActivityTest {
         }
 
         controller.postCreate(null).resume().postResume().visible();
-        // Is there any way to test options menu invalidation?
-        downloadInProgressButton.performClick();
-        assertNextStartedActivity(activity, DownloadListActivity.class);
-    }
-
-    /**
-     * Testing functionality upon receiving a DownloadEvent
-     */
-    @Test
-    public void downloadEventTest() {
-        CourseBaseActivity activity =
-                Robolectric.setupActivity(getActivityClass());
-        View downloadProgressBar =
-                activity.findViewById(R.id.download_in_progress_bar);
-        assumeNotNull(downloadProgressBar);
-        assertThat(downloadProgressBar).isNotVisible();
-        EventBus eventBus = EventBus.getDefault();
-        eventBus.post(new DownloadEvent(DownloadEvent.DownloadStatus.STARTED));
-        assertThat(downloadProgressBar).isVisible();
     }
 
     /**
@@ -101,10 +111,15 @@ public abstract class CourseBaseActivityTest extends BaseFragmentActivityTest {
      */
     @Test
     public void processLifecycleTest() {
-        CourseBaseActivity activity =
-                Robolectric.setupActivity(getActivityClass());
+        // We need to retrieve the progressWheel view before calling visible(), since that
+        // initializes fragment views as well, which might add other views with the same id
+        ActivityController<? extends CourseBaseActivity> controller =
+                Robolectric.buildActivity(getActivityClass()).withIntent(getIntent())
+                        .create().start().postCreate(null).resume();
+        CourseBaseActivity activity = controller.get();
         ProgressBar progressWheel = (ProgressBar)
                 activity.findViewById(R.id.progress_spinner);
+        controller.visible();
         if (progressWheel == null) {
             activity.startProcess();
             activity.finishProcess();
@@ -124,7 +139,8 @@ public abstract class CourseBaseActivityTest extends BaseFragmentActivityTest {
     @Override
     public void initializeOptionsMenuTest() {
         ShadowActivity shadowActivity = Shadows.shadowOf(
-                Robolectric.setupActivity(getActivityClass()));
+                Robolectric.buildActivity(getActivityClass())
+                        .withIntent(getIntent()).setup().get());
         Menu menu = shadowActivity.getOptionsMenu();
         assertNotNull(menu);
         MenuItem shareOnWebItem = menu.findItem(R.id.action_share_on_web);
@@ -133,6 +149,9 @@ public abstract class CourseBaseActivityTest extends BaseFragmentActivityTest {
             assertThat(shareOnWebIcon).isInstanceOf(IconDrawable.class);
             // IconDrawable doesn't expose any property getters..
             // should we use reflection? Or add it to the imported class?
+
+            shadowActivity.clickMenuItem(R.id.action_share_on_web);
+            // How to get the shown custom PopupMenu?
         }
 
         MenuItem changeModelItem = menu.findItem(R.id.action_change_mode);
@@ -140,21 +159,5 @@ public abstract class CourseBaseActivityTest extends BaseFragmentActivityTest {
             Drawable shareOnWebIcon = changeModelItem.getIcon();
             assertThat(shareOnWebIcon).isInstanceOf(IconDrawable.class);
         }
-
-        shadowActivity.clickMenuItem(R.id.action_share_on_web);
-        // How to get the shown custom PopupMenu?
     }
-
-    /**
-     * Ignoring download progress menu visibility states testing defined in
-     * {@link BaseFragmentActivityTest}, as since {@link CourseBaseActivity}
-     * overrides the {@link android.app.Activity#onPrepareOptionsMenu(Menu)}
-     * implementation, there is no longer any testable point where onTick() is
-     * called. The correct implementation for it is only provided in the
-     * @{link CourseVideoListActivity} subclass anyway.
-     */
-    @Override
-    @Ignore
-    @Test
-    public void downloadProgressViewTest() {}
 }

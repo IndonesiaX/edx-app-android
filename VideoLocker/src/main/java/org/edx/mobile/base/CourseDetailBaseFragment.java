@@ -19,7 +19,7 @@ import org.edx.mobile.util.BrowserUtil;
 
 import roboguice.fragment.RoboFragment;
 
-public class CourseDetailBaseFragment extends RoboFragment {
+public abstract class CourseDetailBaseFragment extends RoboFragment {
 
    @Inject
     protected IEdxEnvironment environment;
@@ -59,7 +59,7 @@ public class CourseDetailBaseFragment extends RoboFragment {
                 openInBrowserTv.setOnClickListener(new OnClickListener() {
                     @Override
                     public void onClick(View v) {
-                        new BrowserUtil().open(getActivity(),
+                        BrowserUtil.open(getActivity(),
                                 urlStringBuffer.toString());
                     }
                 });

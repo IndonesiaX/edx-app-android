@@ -1,17 +1,18 @@
 package org.edx.mobile.view;
 
+import android.annotation.TargetApi;
+import android.os.Build;
 import android.os.Bundle;
-import android.text.TextUtils;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.webkit.JavascriptInterface;
+import android.webkit.WebResourceRequest;
+import android.webkit.WebResourceResponse;
 import android.webkit.WebView;
-import android.webkit.WebViewClient;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 
-import org.apache.http.HttpStatus;
 import org.edx.mobile.R;
 import org.edx.mobile.event.SessionIdRefreshEvent;
 import org.edx.mobile.logger.Logger;
@@ -21,8 +22,9 @@ import org.edx.mobile.model.course.HtmlBlockModel;
 import org.edx.mobile.module.prefs.PrefManager;
 import org.edx.mobile.services.EdxCookieManager;
 import org.edx.mobile.services.ViewPagerDownloadManager;
+import org.edx.mobile.view.custom.URLInterceptorWebViewClient;
 
-import java.util.Date;
+import java.net.HttpURLConnection;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -37,9 +39,10 @@ public class CourseUnitWebviewFragment extends CourseUnitFragment{
 
     private final static String EMPTY_HTML = "<html><body></body></html>";
 
-    ProgressBar progressWheel;
-    boolean pageIsLoaded;
-    WebView webView;
+    private ProgressBar progressWheel;
+    private boolean pageIsLoaded;
+    private WebView webView;
+
     /**
      * Create a new instance of fragment
      */
@@ -96,20 +99,33 @@ public class CourseUnitWebviewFragment extends CourseUnitFragment{
 
         webView.clearCache(true);
         webView.getSettings().setJavaScriptEnabled(true);
-        webView.setWebViewClient(new WebViewClient() {
+        URLInterceptorWebViewClient client =
+                new URLInterceptorWebViewClient(getActivity(), webView) {
             @Override
             public void onReceivedError(WebView view, int errorCode,
-                                        String description, String failingUrl) {
+                    String description, String failingUrl) {
                 hideLoadingProgress();
                 pageIsLoaded = false;
                 ViewPagerDownloadManager.instance.done(CourseUnitWebviewFragment.this, false);
-                if ( errorCode == HttpStatus.SC_FORBIDDEN || errorCode == HttpStatus.SC_UNAUTHORIZED || errorCode == HttpStatus.SC_NOT_FOUND){
-                    EdxCookieManager.getSharedInstance().tryToRefreshSessionCookie();
-                }
-                super.onReceivedError(view, errorCode, description, failingUrl);
             }
+
+            // TODO: Restore these annotations when we upgrade our compile SDK version to Marshmallow
+            //@Override
+            //@TargetApi(Build.VERSION_CODES.M)
+            @TargetApi(23)
+            public void onReceivedHttpError(WebView view, WebResourceRequest request,
+                    WebResourceResponse errorResponse) {
+                switch (errorResponse.getStatusCode()) {
+                    case HttpURLConnection.HTTP_FORBIDDEN:
+                    case HttpURLConnection.HTTP_UNAUTHORIZED:
+                    case HttpURLConnection.HTTP_NOT_FOUND:
+                        EdxCookieManager.getSharedInstance().tryToRefreshSessionCookie();
+                        break;
+                }
+            }
+
             public void onPageFinished(WebView view, String url) {
-                if ( url != null && url.equals("data:text/html," + EMPTY_HTML ) ){
+                if (url != null && url.equals("data:text/html," + EMPTY_HTML)) {
                     //we load a local empty html page to release the memory
                 } else {
                     pageIsLoaded = true;
@@ -118,17 +134,12 @@ public class CourseUnitWebviewFragment extends CourseUnitFragment{
                 //TODO -disable it for now. as it causes some issues for assessment
                 //webview to fit in the screen. But we still need it to show additional
                 //compenent below the webview in the future?
-               // view.loadUrl("javascript:EdxAssessmentView.resize(document.body.getBoundingClientRect().height)");
-                super.onPageFinished(view, url);
+                // view.loadUrl("javascript:EdxAssessmentView.resize(document.body.getBoundingClientRect().height)");
                 ViewPagerDownloadManager.instance.done(CourseUnitWebviewFragment.this, true);
                 hideLoadingProgress();
             }
-
-            @Override
-            public boolean shouldOverrideUrlLoading(WebView view, String url) {
-               return false;
-            }
-        });
+        };
+        client.setAllLinksAsExternal(true);
         //webView.addJavascriptInterface(this, "EdxAssessmentView");
 
         if(  ViewPagerDownloadManager.USING_UI_PRELOADING ) {
@@ -151,12 +162,6 @@ public class CourseUnitWebviewFragment extends CourseUnitFragment{
         showLoadingProgress();
 
         if ( unit != null) {
-            if ( unit.isGraded() ){
-                getView().findViewById(R.id.webview_header_text).setVisibility(View.VISIBLE);
-            } else {
-                getView().findViewById(R.id.webview_header_text).setVisibility(View.GONE);
-            }
-
             PrefManager pref = new PrefManager(getActivity(), PrefManager.Pref.LOGIN);
             AuthResponse auth = pref.getCurrentAuth();
             Map<String, String> map = new HashMap<String, String>();
@@ -170,17 +175,15 @@ public class CourseUnitWebviewFragment extends CourseUnitFragment{
                 map.put("Authorization", String.format("%s %s", auth.token_type, auth.access_token));
             }
 
-            Long sessionIdExpirationDate = pref.getLong(PrefManager.Key.AUTH_ASSESSMENT_SESSION_EXPIRATION);
-            String sessionId = pref.getString(PrefManager.Key.AUTH_ASSESSMENT_SESSION_ID);
-            Long curTime = new Date().getTime();
-
-               //if session id is expired or session id is not available, we try to refresh session id
-                if ( sessionIdExpirationDate < curTime || TextUtils.isEmpty(sessionId) ){
-                    EdxCookieManager.getSharedInstance().tryToRefreshSessionCookie();
-                } else {
-                    map.put("Cookie", PrefManager.Key.SESSION_ID + "=" + sessionId );
-                    webView.loadUrl(unit.getBlockUrl(), map);
-                }
+            // Requery the session cookie if unavailable or expired if we are on
+            // an API level lesser than Marshmallow (which provides HTTP error
+            // codes in the error callback for WebViewClient).
+            if (Build.VERSION.SDK_INT < 23 /*Build.VERSION_CODES.M*/ &&
+                    EdxCookieManager.getSharedInstance().isSessionCookieMissingOrExpired()) {
+                EdxCookieManager.getSharedInstance().tryToRefreshSessionCookie();
+            } else {
+                webView.loadUrl(unit.getBlockUrl(), map);
+            }
         }
     }
 

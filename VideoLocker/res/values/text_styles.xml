@@ -10,12 +10,28 @@
         <item name="android:paddingBottom">7dp</item>
     </style>
 
-    <style name="video_title" parent="@style/semibold_white_text">
+    <style name="video_player_title" parent="@style/semibold_white_text" tools:targetApi="17">
+        <item name="android:layout_width">0dp</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_weight">1</item>
         <item name="android:paddingLeft">15dp</item>
         <item name="android:paddingRight">13dp</item>
         <item name="android:textSize">14sp</item>
         <item name="android:paddingTop">8dp</item>
         <item name="android:paddingBottom">8dp</item>
+        <item name="android:singleLine">true</item>
+        <item name="android:ellipsize">end</item>
+        <item name="android:layout_marginLeft">5dp</item>
+        <item name="android:layout_marginStart">5dp</item>
+        <item name="android:layout_marginRight">40dp</item>
+        <item name="android:layout_marginEnd">40dp</item>
+    </style>
+
+    <style name="video_duration_text" parent="@style/semibold_white_text">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:paddingTop">@dimen/video_player_duration_padding</item>
+        <item name="android:textSize">@dimen/edx_x_small</item>
     </style>
 
     <style name="video_desc" parent="@style/regular_text">
@@ -103,29 +119,59 @@
     <style name="bold_white_text" parent="@style/bold_text">
         <item name="android:textColor">@android:color/white</item>
     </style>
+
+    <style name="bold_cyan_text" parent="@style/bold_text">
+        <item name="android:textColor">@color/cyan_text_navigation</item>
+    </style>
+
+    <style name="semibold_white_text" parent="@style/semibold_text">
+        <item name="android:textColor">@android:color/white</item>
+    </style>
     
     <style name="regular_grey_text" parent="@style/regular_text">
         <item name="android:textColor">@color/grey_text_mycourse</item>
-    </style>
-
-    <style name="light_grey_text" parent="@style/regular_text">
-        <item name="android:textColor">@color/grey_video_size_text</item>
     </style>
     
     <style name="regular_white_text" parent="@style/regular_text">
         <item name="android:textColor">@android:color/white</item>
     </style>
+    
+    <style name="bold_edx_brand_primary_base_text" parent="@style/bold_text">
+        <item name="android:textColor">@color/edx_brand_primary_base</item>
+    </style>
+
+    <style name="regular_edx_black_text" parent="@style/regular_text">
+        <item name="android:textColor">@color/edx_grayscale_neutral_black</item>
+    </style>
+
+    <style name="regular_edx_gray_xdark_text" parent="@style/regular_text">
+        <item name="android:textColor">@color/edx_grayscale_neutral_x_dark</item>
+    </style>
+
+    <style name="regular_edx_gray_dark_text" parent="@style/regular_text">
+        <item name="android:textColor">@color/edx_grayscale_neutral_dark</item>
+    </style>
+
+    <style name="regular_edx_gray_base_text" parent="@style/regular_text">
+        <item name="android:textColor">@color/edx_grayscale_neutral_base</item>
+    </style>
 
     <style name="drawer_option" parent="@style/regular_white_text">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">@dimen/height_drawer_menu</item>
         <item name="android:textColor">@color/drawer_option_text</item>
+        <item name="android:background">@drawable/nav_bg_selector</item>
+        <item name="android:gravity">center_vertical</item>
+        <item name="android:paddingBottom">@dimen/widget_margin</item>
+        <item name="android:paddingLeft">@dimen/edx_margin</item>
+        <item name="android:paddingRight">@dimen/edx_margin</item>
+        <item name="android:paddingTop">@dimen/widget_margin</item>
+        <item name="android:textAllCaps">true</item>
+        <item name="android:textSize">@dimen/edx_small</item>
     </style>
-    
-    <style name="semibold_white_text" parent="@style/semibold_text">
-        <item name="android:textColor">@android:color/white</item>
-    </style>
-    
-    <style name="bold_cyan_text" parent="@style/bold_text">
-        <item name="android:textColor">@color/cyan_text_navigation</item>
+
+    <style name="bold_text">
+        <item name="font">OpenSans-Semibold.ttf</item>
     </style>
     
     <style name="semibold_text">
@@ -134,10 +180,6 @@
     
     <style name="regular_text">
         <item name="font">OpenSans-Regular.ttf</item>
-    </style>
-    
-    <style name="bold_text">
-        <item name="font">OpenSans-Semibold.ttf</item>
     </style>
     
      <style name="text_network_error" parent="@style/semibold_white_text">
@@ -157,7 +199,7 @@
         <item name="android:layout_height">wrap_content</item>
         <item name="android:gravity">center</item>
         <item name="android:layout_centerInParent">true</item>
-        <item name="android:textColor">@color/new_user_txt</item>
+        <item name="android:textColor">@color/white</item>
     </style>
 
     <style name="offline_mode_message" parent="@style/bold_text">
@@ -209,6 +251,21 @@
         <item name="android:textSize">11sp</item>
         <item name="android:padding">5dp</item>
         <item name="font">OpenSans-Regular.ttf</item>
+    </style>
+
+    <!-- Course Card styles -->
+    <style name="course_card_title" parent="@style/regular_edx_black_text">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_marginBottom">3dp</item>
+        <item name="android:textSize">@dimen/edx_x_large</item>
+        <item name="android:singleLine">true</item>
+        <item name="android:ellipsize">end</item>
+    </style>
+
+    <style name="course_card_course_run" parent="@style/regular_edx_gray_xdark_text">
+        <item name="android:singleLine">true</item>
+        <item name="android:textSize">@dimen/edx_xxx_small</item>
     </style>
 
 </resources>

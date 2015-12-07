@@ -1,6 +1,7 @@
 package org.edx.mobile.view;
 
 import android.os.Bundle;
+import android.support.annotation.NonNull;
 import android.support.v4.widget.DrawerLayout;
 import android.view.Gravity;
 import android.view.Menu;
@@ -14,20 +15,19 @@ import com.google.inject.Inject;
 
 import org.edx.mobile.R;
 import org.edx.mobile.base.BaseFragmentActivity;
-import org.edx.mobile.event.DownloadEvent;
 import org.edx.mobile.model.api.EnrolledCoursesResponse;
+import org.edx.mobile.model.course.CourseComponent;
 import org.edx.mobile.module.prefs.PrefManager;
 import org.edx.mobile.services.CourseManager;
+import org.edx.mobile.task.GetCourseStructureTask;
 import org.edx.mobile.third_party.iconify.IconDrawable;
-import org.edx.mobile.third_party.iconify.IconView;
 import org.edx.mobile.third_party.iconify.Iconify;
-import org.edx.mobile.util.AppConstants;
 import org.edx.mobile.util.BrowserUtil;
 import org.edx.mobile.util.NetworkUtil;
+import org.edx.mobile.view.common.MessageType;
 import org.edx.mobile.view.common.TaskProcessCallback;
 import org.edx.mobile.view.custom.popup.menu.PopupMenu;
 
-import de.greenrobot.event.EventBus;
 import roboguice.inject.ContentView;
 import roboguice.inject.InjectView;
 
@@ -47,12 +47,6 @@ public abstract  class CourseBaseActivity  extends BaseFragmentActivity implemen
     @InjectView(R.id.last_access_bar)
     View lastAccessBar;
 
-    @InjectView(R.id.download_in_progress_bar)
-    View downloadProgressBar;
-
-    @InjectView(R.id.video_download_indicator)
-    IconView downloadIndicator;
-
     @InjectView(R.id.progress_spinner)
     ProgressBar progressWheel;
 
@@ -61,6 +55,14 @@ public abstract  class CourseBaseActivity  extends BaseFragmentActivity implemen
 
     protected EnrolledCoursesResponse courseData;
     protected String courseComponentId;
+
+    private GetCourseStructureTask getHierarchyTask;
+
+    private boolean isDestroyed;
+
+    protected abstract String getUrlForWebView();
+
+    protected abstract void onLoadData();
 
     @Override
     protected void onCreate(Bundle arg0) {
@@ -72,75 +74,74 @@ public abstract  class CourseBaseActivity  extends BaseFragmentActivity implemen
         }
         restore(bundle);
 
-        initialize(arg0);
-        blockDrawerFromOpening();
-    }
-
-    protected void initialize(Bundle arg){
-
         setApplyPrevTransitionOnRestart(true);
-        ((IconView)findViewById(R.id.video_download_indicator)).setIconColor(getResources().getColor(R.color.edx_brand_primary_light));
-        findViewById(R.id.download_in_progress_button).setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                environment.getRouter().showDownloads(CourseBaseActivity.this);
-            }
-        });
-
-
-        if (!(NetworkUtil.isConnected(this))) {
-            AppConstants.offline_flag = true;
-            invalidateOptionsMenu();
-            showOfflineMessage();
-
-        }
+        blockDrawerFromOpening();
     }
 
     @Override
     protected void onResume() {
         super.onResume();
         invalidateOptionsMenu();
-        if ( !EventBus.getDefault().isRegistered(this) )
-            EventBus.getDefault().register(this);
     }
-
-    @Override
-    protected void onPause() {
-        super.onPause();
-        if ( EventBus.getDefault().isRegistered(this) )
-            EventBus.getDefault().unregister(this);
-    }
-
 
     @Override
     protected void onDestroy() {
         super.onDestroy();
+        if (getHierarchyTask != null) {
+            getHierarchyTask.cancel(true);
+            getHierarchyTask = null;
+        }
+        isDestroyed = true;
     }
-
 
     @Override
     public void onSaveInstanceState(Bundle outState) {
-        if ( courseData != null)
-            outState.putSerializable(Router.EXTRA_ENROLLMENT, courseData);
-        if ( courseComponentId != null )
-            outState.putString(Router.EXTRA_COURSE_COMPONENT_ID, courseComponentId);
         super.onSaveInstanceState(outState);
+        outState.putSerializable(Router.EXTRA_ENROLLMENT, courseData);
+        outState.putString(Router.EXTRA_COURSE_COMPONENT_ID, courseComponentId);
     }
 
     protected void restore(Bundle savedInstanceState) {
-        if (savedInstanceState != null) {
-            courseData = (EnrolledCoursesResponse) savedInstanceState.getSerializable(Router.EXTRA_ENROLLMENT);
-            courseComponentId =   (String)savedInstanceState.getString(Router.EXTRA_COURSE_COMPONENT_ID);
+        courseData = (EnrolledCoursesResponse) savedInstanceState.getSerializable(Router.EXTRA_ENROLLMENT);
+        courseComponentId = savedInstanceState.getString(Router.EXTRA_COURSE_COMPONENT_ID);
 
+        if (courseComponentId == null) {
+            getHierarchyTask = new GetCourseStructureTask(this, courseData.getCourse().getId()) {
+                @Override
+                public void onSuccess(CourseComponent courseComponent) {
+                    if (courseComponent != null) {
+                        courseComponentId = courseComponent.getId();
+                        // Only trigger the callback if the task has not been cancelled, and
+                        // the Activity has not been destroyed. The task should be canceled
+                        // in Activity destruction anyway, so the latter check is just a
+                        // precaution.
+                        if (getHierarchyTask != null && !isDestroyed) {
+                            invalidateOptionsMenu();
+                            onLoadData();
+                            getHierarchyTask = null;
+                        }
+                    }
+                }
+
+                @Override
+                public void onException(Exception ex) {
+                    showInfoMessage(getString(R.string.no_connectivity));
+                }
+            };
+            getHierarchyTask.setTaskProcessCallback(this);
+            getHierarchyTask.setProgressDialog(progressWheel);
+            getHierarchyTask.execute();
         }
     }
 
-    /**
-     * callback for EventBus
-     * https://github.com/greenrobot/EventBus
-     */
-    public void onEvent(DownloadEvent event) {
-        setVisibilityForDownloadProgressView(true);
+    @Override
+    protected void onPostCreate(Bundle savedInstanceState) {
+        super.onPostCreate(savedInstanceState);
+        // If the data is available then trigger the callback
+        // after basic initialization
+        if (courseComponentId != null) {
+            onLoadData();
+        }
     }
 
     @Override
@@ -152,9 +153,7 @@ public abstract  class CourseBaseActivity  extends BaseFragmentActivity implemen
     @Override
     protected void onOffline() {
         offlineBar.setVisibility(View.VISIBLE);
-
         hideLoadingProgress();
-        invalidateOptionsMenu();
     }
 
     @Override
@@ -164,124 +163,92 @@ public abstract  class CourseBaseActivity  extends BaseFragmentActivity implemen
     }
 
     @Override
-    protected boolean createOptionMenu(Menu menu) {
-        MenuInflater inflater = getMenuInflater();
-        inflater.inflate(R.menu.course_detail, menu);
-        return true;
-    }
-
-    @Override
-    public boolean onPrepareOptionsMenu(Menu menu) {
-        if( menu.findItem(R.id.action_share_on_web) != null)
+    protected boolean createOptionsMenu(Menu menu) {
+        if (courseComponentId != null) {
+            MenuInflater inflater = getMenuInflater();
+            inflater.inflate(R.menu.course_detail, menu);
             menu.findItem(R.id.action_share_on_web).setIcon(
-                new IconDrawable(this, Iconify.IconValue.fa_share_square_o)
-                    .actionBarSize().colorRes(R.color.edx_white));
-        PrefManager.UserPrefManager userPrefManager = new PrefManager.UserPrefManager(this);
-
-        if (  menu.findItem(R.id.action_change_mode) != null ) {
-            if (userPrefManager.isUserPrefVideoModel()) {
-                menu.findItem(R.id.action_change_mode).setIcon(
-                    new IconDrawable(this, Iconify.IconValue.fa_film)
-                        .actionBarSize().colorRes(R.color.edx_white));
-            } else {
-                menu.findItem(R.id.action_change_mode).setIcon(
-                    new IconDrawable(this, Iconify.IconValue.fa_list)
-                        .actionBarSize().colorRes(R.color.edx_white));
-            }
+                    new IconDrawable(this, Iconify.IconValue.fa_share_square_o)
+                            .actionBarSize(this).colorRes(this, R.color.edx_white));
+            Iconify.IconValue changeModeIcon = new PrefManager.UserPrefManager(this)
+                    .isUserPrefVideoModel() ? Iconify.IconValue.fa_list :
+                    Iconify.IconValue.fa_film;
+            menu.findItem(R.id.action_change_mode).setIcon(
+                    new IconDrawable(this, changeModeIcon)
+                            .actionBarSize(this).colorRes(this, R.color.edx_white));
+            return true;
         }
-        return true;
+        return false;
     }
+
     @Override
-    public boolean onOptionsItemSelected(MenuItem item) {
-        // Handle presses on the action bar items
+    protected boolean handleOptionsItemSelected(final MenuItem item) {
         switch (item.getItemId()) {
-            case R.id.action_share_on_web:
-                shareOnWeb();
+            case R.id.action_share_on_web: {
+                PopupMenu popup = new PopupMenu(this, findViewById(R.id.action_share_on_web),
+                        Gravity.END, R.attr.edgePopupMenuStyle, R.style.edX_Widget_EdgePopupMenu);
+                popup.getMenuInflater().inflate(R.menu.share_on_web, popup.getMenu());
+                popup.setOnMenuItemClickListener(new PopupMenu.OnMenuItemClickListener() {
+                    public boolean onMenuItemClick(MenuItem item) {
+                        BrowserUtil.open(CourseBaseActivity.this, getUrlForWebView());
+                        CourseComponent courseComponent = courseManager.getComponentById(
+                                courseData.getCourse().getId(), courseComponentId);
+                        environment.getSegment().trackOpenInBrowser(courseComponentId,
+                                courseData.getCourse().getId(), courseComponent.isMultiDevice());
+                        return true;
+                    }
+                });
+                popup.show();
                 return true;
-            case R.id.action_change_mode:
-                changeMode();
-                return true;
-            default:
-                return super.onOptionsItemSelected(item);
-        }
-    }
-
-    public void changeMode(){
-        //Creating the instance of PopupMenu
-        org.edx.mobile.view.custom.popup.menu.PopupMenu popup = new org.edx.mobile.view.custom.popup.menu.PopupMenu(this,
-            findViewById(R.id.action_change_mode), Gravity.END);
-        //Inflating the Popup using xml file
-        popup.getMenuInflater()
-            .inflate(R.menu.change_mode, popup.getMenu());
-        final PrefManager.UserPrefManager userPrefManager =
-            new PrefManager.UserPrefManager(this);
-        final MenuItem videoOnlyItem = popup.getMenu().findItem(R.id.change_mode_video_only);
-        MenuItem fullCourseItem = popup.getMenu().findItem(R.id.change_mode_full_mode);
-        // Initializing the font awesome icons
-        IconDrawable videoOnlyIcon = new IconDrawable(this, Iconify.IconValue.fa_film);
-        IconDrawable fullCourseIcon = new IconDrawable(this, Iconify.IconValue.fa_list);
-        videoOnlyItem.setIcon(videoOnlyIcon);
-        fullCourseItem.setIcon(fullCourseIcon);
-        // Setting checked states
-        if (userPrefManager.isUserPrefVideoModel()) {
-            videoOnlyItem.setChecked(true);
-            videoOnlyIcon.colorRes(R.color.cyan_4);
-            fullCourseIcon.colorRes(R.color.black);
-        } else {
-            fullCourseItem.setChecked(true);
-            fullCourseIcon.colorRes(R.color.cyan_4);
-            videoOnlyIcon.colorRes(R.color.black);
-        }
-
-        //registering popup with OnMenuItemClickListener
-        popup.setOnMenuItemClickListener(new org.edx.mobile.view.custom.popup.menu.PopupMenu.OnMenuItemClickListener() {
-            public boolean onMenuItemClick(MenuItem item) {
-                PrefManager.UserPrefManager userPrefManager =
-                    new PrefManager.UserPrefManager(CourseBaseActivity.this);
-                boolean currentVideoMode = userPrefManager.isUserPrefVideoModel();
-                boolean selectedVideoMode = videoOnlyItem == item;
-                if ( currentVideoMode == selectedVideoMode )
-                    return true;
-
-                userPrefManager.setUserPrefVideoModel(selectedVideoMode);
-                modeChanged();
-                invalidateOptionsMenu();
-                return true;
-            }
-        });
-
-        popup.show(); //showing popup menu
-
-    }
-
-    protected void modeChanged(){};
-
-
-    public void shareOnWeb() {
-        //Creating the instance of PopupMenu
-        PopupMenu popup = new PopupMenu(this, findViewById(R.id.action_share_on_web),
-                Gravity.END, R.attr.edgePopupMenuStyle, R.style.CustomEdgePopupMenu);
-        //Inflating the Popup using xml file
-        popup.getMenuInflater()
-                .inflate(R.menu.share_on_web, popup.getMenu());
-
-
-        //registering popup with OnMenuItemClickListener
-        popup.setOnMenuItemClickListener(new PopupMenu.OnMenuItemClickListener() {
-            public boolean onMenuItemClick(MenuItem item) {
-                new BrowserUtil().open(CourseBaseActivity.this, getUrlForWebView());
+            } case R.id.action_change_mode: {
+                PopupMenu popup = new PopupMenu(this, findViewById(R.id.action_change_mode), Gravity.END);
+                popup.getMenuInflater().inflate(R.menu.change_mode, popup.getMenu());
+                final PrefManager.UserPrefManager userPrefManager = new PrefManager.UserPrefManager(this);
+                final MenuItem videoOnlyItem = popup.getMenu().findItem(R.id.change_mode_video_only);
+                MenuItem fullCourseItem = popup.getMenu().findItem(R.id.change_mode_full_mode);
+                videoOnlyItem.setIcon(new IconDrawable(this, Iconify.IconValue.fa_film)
+                        .colorRes(this, R.color.course_mode));
+                fullCourseItem.setIcon(new IconDrawable(this, Iconify.IconValue.fa_list)
+                        .colorRes(this, R.color.course_mode));
+                // Setting checked states
+                // Only calling setChecked(true) in the selected menu item, to avoid a bug
+                // in the MenuItem implementation in the framework and appcompat library
+                // which causes setChecked(false) to be evaluated to setChecked(true) in
+                // the case where it is part of a group with checkable behavior set to
+                // 'single'. It's reported as part of another issue in
+                // http://b.android.com/178709
+                if (userPrefManager.isUserPrefVideoModel()) {
+                    videoOnlyItem.setChecked(true);
+                } else {
+                    fullCourseItem.setChecked(true);
+                }
+                popup.setOnMenuItemClickListener(new PopupMenu.OnMenuItemClickListener() {
+                    public boolean onMenuItemClick(MenuItem item) {
+                        boolean currentVideoMode = userPrefManager.isUserPrefVideoModel();
+                        boolean selectedVideoMode = videoOnlyItem == item;
+                        if (currentVideoMode != selectedVideoMode) {
+                            userPrefManager.setUserPrefVideoModel(selectedVideoMode);
+                            item.setChecked(true);
+                            Iconify.IconValue filterIcon = selectedVideoMode ?
+                                    Iconify.IconValue.fa_list : Iconify.IconValue.fa_film;
+                            item.setIcon(
+                                    new IconDrawable(CourseBaseActivity.this, filterIcon)
+                                            .actionBarSize(CourseBaseActivity.this)
+                                            .colorRes(CourseBaseActivity.this, R.color.edx_white));
+                            modeChanged();
+                            environment.getSegment().trackCourseOutlineMode(selectedVideoMode);
+                        }
+                        return true;
+                    }
+                });
+                popup.show();
                 return true;
             }
-        });
-
-        popup.show(); //showing popup menu
+        }
+        return false;
     }
 
-
-
-    protected  abstract  String getUrlForWebView();
-
-
+    protected void modeChanged() {}
 
     /**
      * This function shows the offline mode message
@@ -321,12 +288,6 @@ public abstract  class CourseBaseActivity  extends BaseFragmentActivity implemen
         }
     }
 
-
-    protected void setVisibilityForDownloadProgressView(boolean show){
-        if ( downloadProgressBar != null )
-            downloadProgressBar.setVisibility(show ? View.VISIBLE : View.GONE);
-    }
-
     protected void hideLastAccessedView(View v) {
         try{
             lastAccessBar.setVisibility(View.GONE);
@@ -336,19 +297,13 @@ public abstract  class CourseBaseActivity  extends BaseFragmentActivity implemen
     }
 
     protected void showLastAccessedView(View v, String title, View.OnClickListener listener) {
-        try{
-            lastAccessBar.setVisibility(View.VISIBLE);
-            //
-            View lastAccessTextView = v == null ? findViewById(R.id.last_access_text) :
-                v.findViewById(R.id.last_access_text);
-            ((TextView)lastAccessTextView).setText(title);
-            View detailButton = v == null ? findViewById(R.id.last_access_button) :
-                v.findViewById(R.id.last_access_button);
-            detailButton.setOnClickListener(listener);
-
-        }catch(Exception e){
-            logger.error(e);
-        }
+        lastAccessBar.setVisibility(View.VISIBLE);
+        View lastAccessTextView = v == null ? findViewById(R.id.last_access_text) :
+            v.findViewById(R.id.last_access_text);
+        ((TextView)lastAccessTextView).setText(title);
+        View detailButton = v == null ? findViewById(R.id.last_access_button) :
+            v.findViewById(R.id.last_access_button);
+        detailButton.setOnClickListener(listener);
     }
 
 
@@ -375,6 +330,10 @@ public abstract  class CourseBaseActivity  extends BaseFragmentActivity implemen
      */
     public void finishProcess(){
         hideLoadingProgress();
+    }
+
+    public void onMessage(@NonNull MessageType messageType, @NonNull String message){
+        showErrorMessage("", message);
     }
 }
 

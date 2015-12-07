@@ -1,14 +1,15 @@
 package org.edx.mobile.view;
 
-import android.content.Intent;
 import android.os.Bundle;
 import android.support.v4.app.FragmentTransaction;
 
 import com.google.inject.Inject;
 
 import org.edx.mobile.R;
-import org.edx.mobile.model.course.BlockPath;
+import org.edx.mobile.base.MainApplication;
 import org.edx.mobile.model.course.CourseComponent;
+import org.edx.mobile.module.analytics.ISegment;
+import org.edx.mobile.module.prefs.PrefManager;
 import org.edx.mobile.services.CourseManager;
 import org.edx.mobile.services.LastAccessManager;
 
@@ -17,8 +18,6 @@ import org.edx.mobile.services.LastAccessManager;
  *  Top level outline for the Course
  */
 public class CourseOutlineActivity extends CourseVideoListActivity {
-
-    static final int REQUEST_SHOW_COURSE_UNIT_DETAIL = 0;
 
     private CourseOutlineFragment fragment;
 
@@ -29,65 +28,73 @@ public class CourseOutlineActivity extends CourseVideoListActivity {
         super.onCreate(savedInstanceState);
  
         setApplyPrevTransitionOnRestart(true);
-        try{
-            environment.getSegment().screenViewsTracking(getString(R.string.course_outline));
-        }catch(Exception e){
-            logger.error(e);
-        }
 
+        if (isOnCourseOutline()) {
+            environment.getSegment().trackScreenView(
+                    ISegment.Screens.COURSE_OUTLINE, courseData.getCourse().getId(), null);
+        }
     }
 
     public void onResume(){
         super.onResume();
 
-        if ( courseData != null && courseData.getCourse() != null ){
-            CourseComponent courseComponent = courseManager.getComponentById(courseData.getCourse().getId(), courseComponentId);
-            if ( courseComponent == null)
-                setTitle( courseData.getCourse().getName() );
-            else
-                setTitle( courseComponent.getName() );
+        if (isOnCourseOutline()) {
+            setTitle(courseData.getCourse().getName());
+            LastAccessManager.getSharedInstance().fetchLastAccessed(this, courseData.getCourse().getId());
+        }
+    }
 
-            if (isOnCourseOutline())
-                LastAccessManager.getSharedInstance().fetchLastAccessed(this, courseData.getCourse().getId());
+    @Override
+    protected void onLoadData() {
+        CourseComponent courseComponent = courseManager.getComponentById(
+                courseData.getCourse().getId(), courseComponentId);
+        setTitle(courseComponent.getDisplayName());
+
+        if (fragment == null) {
+            fragment = new CourseOutlineFragment();
+            fragment.setTaskProcessCallback(this);
+
+            Bundle bundle = new Bundle();
+            bundle.putSerializable(Router.EXTRA_ENROLLMENT, courseData);
+            bundle.putString(Router.EXTRA_COURSE_COMPONENT_ID, courseComponentId);
+            bundle.putString(Router.EXTRA_LAST_ACCESSED_ID
+                    , getIntent().getStringExtra(Router.EXTRA_LAST_ACCESSED_ID));
+            fragment.setArguments(bundle);
+            //this activity will only ever hold this lone fragment, so we
+            // can afford to retain the instance during activity recreation
+            fragment.setRetainInstance(true);
+
+            FragmentTransaction fragmentTransaction = getSupportFragmentManager().beginTransaction();
+            fragmentTransaction.add(R.id.fragment_container, fragment, CourseOutlineFragment.TAG);
+            fragmentTransaction.disallowAddToBackStack();
+            fragmentTransaction.commit();
+        }
+
+        if (isOnCourseOutline()) {
+            LastAccessManager.getSharedInstance().fetchLastAccessed(this, courseData.getCourse().getId());
+        } else {
+            environment.getSegment().trackScreenView(
+                    ISegment.Screens.SECTION_OUTLINE, courseData.getCourse().getId(), courseComponent.getInternalName());
+
+            // Update the last accessed item reference if we are in the course subsection view
+            String prefName = PrefManager.getPrefNameForLastAccessedBy(getProfile()
+                    .username, courseComponent.getCourseId());
+            final PrefManager prefManager = new PrefManager(MainApplication.instance(), prefName);
+            prefManager.putLastAccessedSubsection(courseComponent.getId(), false);
         }
     }
 
     @Override
     protected String getUrlForWebView() {
-        if ( courseData == null )
-            return "";
+        if ( courseComponentId == null ) return "";
         CourseComponent courseComponent = courseManager.getComponentById(courseData.getCourse().getId(), courseComponentId);
-        return courseComponent == null ? "" : courseComponent.getWebUrl();
+        return courseComponent.getWebUrl();
     }
-
 
     @Override
     protected void onPostCreate(Bundle savedInstanceState) {
         super.onPostCreate(savedInstanceState);
-        if (savedInstanceState == null){
-            try {
-                fragment = new CourseOutlineFragment();
-                fragment.setTaskProcessCallback(this);
-
-                if (courseData != null) {
-                    Bundle bundle = new Bundle();
-                    bundle.putSerializable(Router.EXTRA_ENROLLMENT, courseData);
-                    bundle.putString(Router.EXTRA_COURSE_COMPONENT_ID, courseComponentId);
-                    fragment.setArguments(bundle);
-                }
-                //this activity will only ever hold this lone fragment, so we
-                // can afford to retain the instance during activity recreation
-                fragment.setRetainInstance(true);
-
-                FragmentTransaction fragmentTransaction = getSupportFragmentManager().beginTransaction();
-                fragmentTransaction.add(R.id.fragment_container, fragment, CourseOutlineFragment.TAG);
-                fragmentTransaction.disallowAddToBackStack();
-                fragmentTransaction.commit();
-
-            } catch (Exception e) {
-                logger.error(e);
-            }
-        } else {
+        if (savedInstanceState != null){
              fragment = (CourseOutlineFragment)
                  getSupportFragmentManager().findFragmentByTag(CourseOutlineFragment.TAG);
         }
@@ -95,47 +102,9 @@ public class CourseOutlineActivity extends CourseVideoListActivity {
 
     @Override
     public void updateListUI() {
-        if( fragment != null )
+        if( fragment != null ) {
             fragment.reloadList();
-        fragment.updateMessageView(null);
-    }
-
-    @Override
-    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
-        super.onActivityResult(requestCode, resultCode, data);
-        switch (requestCode) {
-            // If user has navigated to a different unit, then we need to rearrange
-            // the activity stack to point to it.
-            case REQUEST_SHOW_COURSE_UNIT_DETAIL: {
-                switch (resultCode) {
-                    case RESULT_OK: {
-                        CourseComponent outlineComp = courseManager.getComponentById(
-                                courseData.getCourse().getId(), courseComponentId);
-                        CourseComponent leafComp = (CourseComponent)
-                                data.getSerializableExtra(Router.EXTRA_COURSE_UNIT);
-                        BlockPath outlinePath = outlineComp.getPath();
-                        BlockPath leafPath = leafComp.getPath();
-                        int outlinePathSize = outlinePath.getPath().size();
-                        if (!leafPath.get(outlinePathSize - 1).equals(outlineComp)) {
-                            setResult(RESULT_OK, data);
-                            finish();
-                        } else {
-                            for (int i = outlinePathSize + 1;; i += 2) {
-                                CourseComponent nextComp = leafPath.get(i);
-                                if (nextComp == null || !nextComp.isContainer()) {
-                                    break;
-                                }
-                                environment.getRouter().showCourseContainerOutline(this,
-                                        REQUEST_SHOW_COURSE_UNIT_DETAIL, courseData, nextComp.getId());
-                            }
-                            overridePendingTransition(R.anim.slide_in_from_start, R.anim.slide_out_to_end);
-                        }
-                    }
-                }
-                break;
-            }
+            fragment.updateMessageView(null);
         }
     }
-
-
 }

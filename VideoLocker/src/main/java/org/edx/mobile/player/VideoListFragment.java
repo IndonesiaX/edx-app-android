@@ -14,6 +14,8 @@ import android.widget.ListView;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import com.google.inject.Inject;
+
 import org.edx.mobile.R;
 import org.edx.mobile.base.MyVideosBaseFragment;
 import org.edx.mobile.interfaces.SectionItemInterface;
@@ -25,7 +27,6 @@ import org.edx.mobile.model.api.VideoResponseModel;
 import org.edx.mobile.model.db.DownloadEntry;
 import org.edx.mobile.module.db.DataCallback;
 import org.edx.mobile.module.prefs.PrefManager;
-import org.edx.mobile.services.ServiceManager;
 import org.edx.mobile.task.CircularProgressTask;
 import org.edx.mobile.util.AppConstants;
 import org.edx.mobile.util.BrowserUtil;
@@ -67,6 +68,8 @@ public class VideoListFragment extends MyVideosBaseFragment {
     private DownloadEntry videoModel;
     private boolean downloadAvailable = false;
     private Button deleteButton;
+    @Inject
+    TranscriptManager transcriptManager;
 
     private final Logger logger = new Logger(getClass().getName());
 
@@ -133,12 +136,10 @@ public class VideoListFragment extends MyVideosBaseFragment {
                 if (offlineBar != null)
                     offlineBar.setVisibility(View.VISIBLE);
                 showDeletePanel(getView());
-                AppConstants.offline_flag = true;
             } else {
                 if (offlineBar != null) {
                     offlineBar.setVisibility(View.GONE);
                 }
-                AppConstants.offline_flag = false;
             }
 
             setAdaptertoVideoList();
@@ -155,7 +156,7 @@ public class VideoListFragment extends MyVideosBaseFragment {
 
     public void setAdaptertoVideoList(){
         if (!myVideosFlag) {
-            if (AppConstants.offline_flag) {
+            if (!NetworkUtil.isConnected(getActivity())) {
                 addDataToOfflineAdapter();
             } else {
                 addDataToOnlineAdapter();
@@ -437,12 +438,8 @@ public class VideoListFragment extends MyVideosBaseFragment {
             videoListView.setOnItemClickListener(adapter);
 
             setActivityTitle(enrollment.getCourse().getName());
-            try{
-                environment.getSegment().screenViewsTracking("My Videos - All Videos - "
-                        + enrollment.getCourse().getName());
-            }catch(Exception e){
-                logger.error(e);
-            }
+            environment.getSegment().trackScreenView("My Videos - All Videos - "
+                    + enrollment.getCourse().getName());
 
             ArrayList<SectionItemInterface> list = environment.getStorage()
                     .getSortedOrganizedVideosByCourse(enrollment.getCourse().getId());
@@ -538,7 +535,7 @@ public class VideoListFragment extends MyVideosBaseFragment {
 
     private void showOpenInBrowserPanel() {
         try {
-            if (!AppConstants.offline_flag) {
+            if (NetworkUtil.isConnected(getActivity())) {
                 if (isPlayerVisible()) {
                     hideOpenInBrowserPanel();
                 } else {
@@ -556,7 +553,7 @@ public class VideoListFragment extends MyVideosBaseFragment {
                     openInBrowserTv.setOnClickListener(new OnClickListener() {
                         @Override
                         public void onClick(View v) {
-                            new BrowserUtil().open(getActivity(),
+                            BrowserUtil.open(getActivity(),
                                     urlStringBuffer.toString());
                         }
                     });
@@ -572,7 +569,6 @@ public class VideoListFragment extends MyVideosBaseFragment {
 
     public void onOffline() {
         if (!isLandscape) {
-            AppConstants.offline_flag = true;
             if (offlineBar != null) {
                 offlineBar.setVisibility(View.VISIBLE);
             }
@@ -597,7 +593,6 @@ public class VideoListFragment extends MyVideosBaseFragment {
     }
 
     public void onOnline() {
-        AppConstants.offline_flag = false;
         if (!isLandscape) {
             if (offlineBar != null) {
                 offlineBar.setVisibility(View.GONE);
@@ -803,7 +798,7 @@ public class VideoListFragment extends MyVideosBaseFragment {
         public void handleMessage(android.os.Message msg) {
             if (msg.what == MSG_UPDATE_PROGRESS) {
                 if (isActivityStarted()) {
-                    if (!AppConstants.offline_flag) {
+                    if (NetworkUtil.isConnected(getActivity())) {
                         if (adapter != null && enrollment!=null && chapterName!=null && lecture!=null) {
                             if(environment.getDatabase().isAnyVideoDownloadingInSubSection(null, enrollment.getCourse().getId(), chapterName, lecture.name)){
                                 adapter.setSelectedPosition(playingVideoIndex);
@@ -925,7 +920,7 @@ public class VideoListFragment extends MyVideosBaseFragment {
 
         if(deletedVideoCount>0){
             try {
-                String format = ResourceUtil.getFormattedStringForQuantity(R.plurals.deleted_video,
+                String format = ResourceUtil.getFormattedStringForQuantity(getResources(), R.plurals.deleted_video,
                         "video_count", deletedVideoCount).toString();
 
                 ((VideoListActivity) getActivity())
@@ -999,8 +994,7 @@ public class VideoListFragment extends MyVideosBaseFragment {
                 if (reloadListFlag) {
                     adapter.notifyDataSetChanged();
                 }
-                TranscriptManager transManager = new TranscriptManager(getActivity());
-                transManager.downloadTranscriptsForVideo(downloadEntry.transcript);
+                transcriptManager.downloadTranscriptsForVideo(downloadEntry.transcript);
             }
         }catch(Exception e){
             logger.error(e);
@@ -1123,7 +1117,7 @@ public class VideoListFragment extends MyVideosBaseFragment {
                 while (videoPos < adapter.getCount()) {
                     SectionItemInterface i = adapter.getItem(videoPos);
                     if (i!=null && i instanceof DownloadEntry) {
-                        if(AppConstants.offline_flag){
+                        if(!NetworkUtil.isConnected(getActivity())){
                             DownloadEntry de = (DownloadEntry) i;
                             if(de.isDownloaded()){
                                 if (callback != null) {
@@ -1165,7 +1159,7 @@ public class VideoListFragment extends MyVideosBaseFragment {
                         SectionItemInterface d = adapter.getItem(i);
                         if (d!=null && d instanceof DownloadEntry) {
                             DownloadEntry de = (DownloadEntry) d;
-                            if(AppConstants.offline_flag){
+                            if(!NetworkUtil.isConnected(getActivity())){
                                 if(de.isDownloaded()){
                                     return true;
                                 }
@@ -1192,7 +1186,7 @@ public class VideoListFragment extends MyVideosBaseFragment {
                 while (videoPos >= 0) {
                     SectionItemInterface i = adapter.getItem(videoPos);
                     if (i!=null && i instanceof DownloadEntry) {
-                        if(AppConstants.offline_flag){
+                        if(!NetworkUtil.isConnected(getActivity())){
                             DownloadEntry de = (DownloadEntry) i;
                             if(de.isDownloaded()){
                                 if (callback != null) {
@@ -1232,7 +1226,7 @@ public class VideoListFragment extends MyVideosBaseFragment {
                         SectionItemInterface d = adapter.getItem(i);
                         if (d!=null && d instanceof DownloadEntry) {
                             DownloadEntry de = (DownloadEntry) d;
-                            if(AppConstants.offline_flag){
+                            if(!NetworkUtil.isConnected(getActivity())){
                                 if(de.isDownloaded()){
                                     return true;
                                 }

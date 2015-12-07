@@ -30,6 +30,8 @@ public class Config {
     /* Individual configuration keys */
     private static final String API_HOST_URL = "API_HOST_URL";
     private static final String ENVIRONMENT_DISPLAY_NAME = "ENVIRONMENT_DISPLAY_NAME";
+    private static final String PLATFORM_NAME = "PLATFORM_NAME";
+    private static final String PLATFORM_DESTINATION_NAME = "PLATFORM_DESTINATION_NAME";
     private static final String FEEDBACK_EMAIL_ADDRESS = "FEEDBACK_EMAIL_ADDRESS";
     private static final String OAUTH_CLIENT_ID = "OAUTH_CLIENT_ID";
     private static final String SPEED_TEST_ENABLED = "SPEED_TEST_ENABLED";
@@ -54,9 +56,14 @@ public class Config {
     public static final String TEST_ACCOUNT_NAME = "NAME";
     public static final String TEST_ACCOUNT_PASSWORD = "PASSWORD";
 
-    public static final String NEW_COURSE_NAVIGATION_ENABLED = "NEW_COURSE_NAVIGATION_ENABLED";
+    public static final String USER_PROFILES_ENABLED = "USER_PROFILES_ENABLED";
     public static final String DISCUSSIONS_ENABLED = "DISCUSSIONS_ENABLED";
 
+    public static final String CERTIFICATES_ENABLED = "CERTIFICATES_ENABLED";
+
+    public static final String SHARE_COURSE_ENABLED = "SHARE_COURSE_ENABLED";
+
+    private static final String SERVER_SIDE_CHANGED_THREAD = "SERVER_SIDE_CHANGED_THREAD";
     /**
      * Social Sharing configuration.
      */
@@ -312,6 +319,17 @@ public class Config {
         return getString(API_HOST_URL);
     }
 
+    // User facing name of the platform like "edX"
+    public String getPlatformName() {
+        return getString(PLATFORM_NAME);
+    }
+
+    // User facing name of the platform as a destination like "edx.org"
+    public String getPlatformDestinationName() {
+        return getString(PLATFORM_DESTINATION_NAME);
+    }
+
+    // Debug name of the current configuration
     public String getEnvironmentDisplayName() {
         return getString(ENVIRONMENT_DISPLAY_NAME);
     }
@@ -328,6 +346,9 @@ public class Config {
         return getBoolean(PUSH_NOTIFICATIONS_FLAG, false);
     }
 
+
+
+
     /**
      * Empty or no config returns false.
      * Otherwise, returns the value from the config.
@@ -337,14 +358,18 @@ public class Config {
         return getBoolean(SPEED_TEST_ENABLED, false);
     }
 
-
-    public boolean isNewCourseNavigationEnabled() {
-        return getBoolean(NEW_COURSE_NAVIGATION_ENABLED, false);
+    public boolean isUserProfilesEnabled() {
+        return getBoolean(USER_PROFILES_ENABLED, false);
     }
 
     public boolean isDiscussionsEnabled() {
         return getBoolean(DISCUSSIONS_ENABLED, false);
     }
+
+    public boolean areCertificateLinksEnabled() { return getBoolean(CERTIFICATES_ENABLED, false); }
+
+    public boolean isShareCourseEnabled() { return getBoolean(SHARE_COURSE_ENABLED, false); }
+
     /**
      * Returns Course Enrollment configuration.
      * @return

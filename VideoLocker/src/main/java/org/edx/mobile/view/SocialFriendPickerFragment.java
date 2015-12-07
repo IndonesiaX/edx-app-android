@@ -29,7 +29,9 @@ import org.edx.mobile.module.analytics.ISegment;
 import org.edx.mobile.social.SocialMember;
 import org.edx.mobile.social.SocialProvider;
 import org.edx.mobile.social.facebook.FacebookProvider;
+import org.edx.mobile.util.Config;
 import org.edx.mobile.util.JavaUtil;
+import org.edx.mobile.util.ResourceUtil;
 import org.edx.mobile.view.adapters.FriendListAdapter;
 
 import java.util.ArrayList;
@@ -68,6 +70,8 @@ public class SocialFriendPickerFragment extends RoboFragment implements SocialPr
 
     @Inject
     ISegment segIO;
+    @Inject
+    Config config;
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -87,23 +91,16 @@ public class SocialFriendPickerFragment extends RoboFragment implements SocialPr
 
         });
 
-
-        try{
-            segIO.screenViewsTracking("Social Friend Picker");
-        }catch(Exception e){
-            logger.error(e);
-        }
-
+        segIO.trackScreenView(ISegment.Screens.SOCIAL_FRIEND_PICKER);
     }
 
 
     @Override
     public void onCreateOptionsMenu(Menu menu, MenuInflater inflater) {
         super.onCreateOptionsMenu(menu, inflater);
+        inflater.inflate(R.menu.social_friend_picker, menu);
 
         doneMenuItem = menu.findItem(R.id.done_btn);
-        doneMenuItem.setVisible(true);
-
         doneMenuItem.getActionView().setOnClickListener(new View.OnClickListener() {
 
             @Override
@@ -170,6 +167,9 @@ public class SocialFriendPickerFragment extends RoboFragment implements SocialPr
         final TextView searchHeader = (TextView) view.findViewById(R.id.search_list_header);
 
         searchText = (EditText) view.findViewById(R.id.search_friends_edit_text);
+
+        final CharSequence emptyHeaderMessage = ResourceUtil.getFormattedString(getResources(), R.string.friends_with_platform_accounts, "platform_name", config.getPlatformName());
+        searchHeader.setText(emptyHeaderMessage);
         searchText.addTextChangedListener(new TextWatcher() {
             @Override
             public void beforeTextChanged(CharSequence charSequence, int i, int i2, int i3) {
@@ -186,7 +186,7 @@ public class SocialFriendPickerFragment extends RoboFragment implements SocialPr
                 if (TextUtils.isEmpty(s)) {
                     filter.filter("");
                     cancelBtn.setVisibility(View.INVISIBLE);
-                    searchHeader.setText(R.string.friends_with_edx_accounts);
+                    searchHeader.setText(emptyHeaderMessage);
 
                 } else {
                     filter.filter(s);
@@ -219,8 +219,8 @@ public class SocialFriendPickerFragment extends RoboFragment implements SocialPr
             case LOADED:
                 if (friendListAdapter.isEmpty()) {
                     errorMessage.setVisibility(View.VISIBLE);
-
-                    errorMessage.setText(R.string.error_no_friends_connected);
+                    CharSequence message = ResourceUtil.getFormattedString(getResources(), R.string.error_no_friends_connected, "platform_name", config.getPlatformName());
+                    errorMessage.setText(message);
                     searchText.setEnabled(false);
                 } else {
                     listView.setVisibility(View.VISIBLE);

@@ -1,5 +1,9 @@
 package org.edx.mobile.module.analytics;
 
+import android.content.ComponentName;
+import android.support.annotation.NonNull;
+import android.support.annotation.Nullable;
+
 import com.segment.analytics.Properties;
 import com.segment.analytics.Traits;
 
@@ -59,7 +63,12 @@ public class ISegmentEmptyImpl implements ISegment {
     }
 
     @Override
-    public Properties screenViewsTracking(String screenName) {
+    public Properties trackScreenView(String screenName) {
+        return null;
+    }
+
+    @Override
+    public Properties trackScreenView(String screenName, String courseId, String value) {
         return null;
     }
 
@@ -129,12 +138,12 @@ public class ISegmentEmptyImpl implements ISegment {
     }
 
     @Override
-    public Properties trackNotificationReceived(String courseId){
+    public Properties trackNotificationReceived(@Nullable String courseId){
         return null;
     }
 
     @Override
-    public Properties trackNotificationTapped(String courseId){
+    public Properties trackNotificationTapped(@Nullable String courseId){
         return null;
     }
 
@@ -178,7 +187,12 @@ public class ISegmentEmptyImpl implements ISegment {
     }
 
     @Override
-    public Properties certificateShared(String courseId, String socialNetwork) {
+    public Properties courseDetailShared(@NonNull String courseId, @NonNull String aboutUrl, @NonNull ComponentName componentName) {
+        return null;
+    }
+
+    @Override
+    public Properties certificateShared(@NonNull String courseId, @NonNull String certificateUrl, @NonNull ComponentName componentName) {
         return null;
     }
 
@@ -189,6 +203,31 @@ public class ISegmentEmptyImpl implements ISegment {
 
     @Override
     public Properties coursesVisibleToFriendsChange(boolean visible) {
+        return null;
+    }
+
+    @Override
+    public Properties trackCourseOutlineMode(boolean isVideoMode) {
+        return null;
+    }
+
+    @Override
+    public Properties trackCourseComponentViewed(String blockId, String courseId) {
+        return null;
+    }
+
+    @Override
+    public Properties trackOpenInBrowser(String blockId, String courseId, boolean isSupported) {
+        return null;
+    }
+
+    @Override
+    public Properties trackProfileViewed(@NonNull String username) {
+        return null;
+    }
+
+    @Override
+    public Properties trackProfilePhotoSet(boolean fromCamera) {
         return null;
     }
 }

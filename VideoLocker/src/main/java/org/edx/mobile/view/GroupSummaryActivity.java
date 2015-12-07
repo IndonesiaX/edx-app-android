@@ -51,7 +51,9 @@ public class GroupSummaryActivity extends BaseSingleFragmentActivity {
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
 
-        boolean create = super.onCreateOptionsMenu(menu);
+        super.onCreateOptionsMenu(menu);
+
+        getMenuInflater().inflate(R.menu.group_summary, menu);
 
         MenuItem unreadMenuItem = menu.findItem(R.id.unread_display);
 
@@ -62,13 +64,13 @@ public class GroupSummaryActivity extends BaseSingleFragmentActivity {
             unreadMenuItem.setVisible(true);
             View unreadTextView = unreadMenuItem.getActionView();
             ETextView unreadTV = (ETextView) unreadTextView.findViewById(R.id.unread_tv);
-            CharSequence formatted =  ResourceUtil.getFormattedStringForQuantity(R.string.unread_text,
-                    "unread_count", group.getUnread());
+            CharSequence formatted =  ResourceUtil.getFormattedString(getResources(), R.string.unread_text,
+                    "unread_count", String.valueOf(group.getUnread()));
             unreadTV.setText( formatted );
 
         }
 
-        return create;
+        return true;
 
     }
 }

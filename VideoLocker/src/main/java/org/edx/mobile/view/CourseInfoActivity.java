@@ -7,20 +7,18 @@ import org.edx.mobile.R;
 import org.edx.mobile.base.FindCoursesBaseActivity;
 import org.edx.mobile.module.analytics.ISegment;
 
+import roboguice.inject.ContentView;
+
+@ContentView(R.layout.activity_find_course_info)
 public class CourseInfoActivity extends FindCoursesBaseActivity {
 
     public static final String EXTRA_PATH_ID = "path_id";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
-        setContentView(R.layout.activity_find_course_info);
         super.onCreate(savedInstanceState);
 
-        try{
-            environment.getSegment().screenViewsTracking(ISegment.Values.COURSE_INFO_SCREEN);
-        }catch(Exception e){
-            logger.error(e);
-        }
+        environment.getSegment().trackScreenView(ISegment.Screens.COURSE_INFO_SCREEN);
     }
 
     @Override

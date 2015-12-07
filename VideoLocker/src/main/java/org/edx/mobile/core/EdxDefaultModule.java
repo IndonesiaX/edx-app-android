@@ -1,12 +1,17 @@
 package org.edx.mobile.core;
 
 import android.content.Context;
+import android.support.v7.widget.LinearLayoutManager;
 
 import com.google.inject.AbstractModule;
+import com.google.inject.Provider;
+import com.squareup.okhttp.OkHttpClient;
 
 import org.edx.mobile.base.MainApplication;
+import org.edx.mobile.discussion.DiscussionTextUtils;
 import org.edx.mobile.http.Api;
 import org.edx.mobile.http.IApi;
+import org.edx.mobile.http.OkHttpUtil;
 import org.edx.mobile.http.RestApiManager;
 import org.edx.mobile.module.analytics.ISegment;
 import org.edx.mobile.module.analytics.ISegmentEmptyImpl;
@@ -22,6 +27,7 @@ import org.edx.mobile.module.notification.NotificationDelegate;
 import org.edx.mobile.module.notification.ParseNotificationDelegate;
 import org.edx.mobile.module.storage.IStorage;
 import org.edx.mobile.module.storage.Storage;
+import org.edx.mobile.util.BrowserUtil;
 import org.edx.mobile.util.Config;
 
 public class EdxDefaultModule extends AbstractModule {
@@ -49,6 +55,8 @@ public class EdxDefaultModule extends AbstractModule {
 
         bind(IDownloadManager.class).to(IDownloadManagerImpl.class);
 
+        bind(OkHttpClient.class).toInstance(OkHttpUtil.getOAuthBasedClient(context));
+
         if (MainApplication.RETROFIT_ENABLED ){
             bind(IApi.class).to(RestApiManager.class);
         } else {
@@ -70,6 +78,12 @@ public class EdxDefaultModule extends AbstractModule {
         }
 
         bind(IEdxEnvironment.class).to(EdxEnvironment.class);
+
+        bind(LinearLayoutManager.class).toProvider(LinearLayoutManagerProvider.class);
+
+        requestStaticInjection(BrowserUtil.class);
+
+        requestStaticInjection(DiscussionTextUtils.class);
 
     }
 }

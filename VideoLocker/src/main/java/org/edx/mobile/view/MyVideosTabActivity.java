@@ -19,12 +19,10 @@ import android.widget.TextView;
 
 import org.edx.mobile.R;
 import org.edx.mobile.logger.Logger;
-import org.edx.mobile.model.api.ProfileModel;
-import org.edx.mobile.module.prefs.PrefManager;
+import org.edx.mobile.module.analytics.ISegment;
 import org.edx.mobile.player.PlayerActivity;
 import org.edx.mobile.player.VideoListFragment.VideoListCallback;
 import org.edx.mobile.util.AppConstants;
-import org.edx.mobile.util.NetworkUtil;
 
 public class MyVideosTabActivity extends PlayerActivity implements VideoListCallback {
 
@@ -49,17 +47,7 @@ public class MyVideosTabActivity extends PlayerActivity implements VideoListCall
 
         offlineBar = findViewById(R.id.offline_bar);
 
-        if (!(NetworkUtil.isConnected(this))) {
-            AppConstants.offline_flag = true;
-            invalidateOptionsMenu();
-            offlineBar.setVisibility(View.VISIBLE);
-        }
-
-        try{
-            environment.getSegment().screenViewsTracking(getString(R.string.label_my_videos));
-        }catch(Exception e){
-            logger.error(e);
-        }
+        environment.getSegment().trackScreenView(ISegment.Screens.MY_VIDEOS);
 
         // now init the tabs
         initializeTab();
@@ -81,13 +69,8 @@ public class MyVideosTabActivity extends PlayerActivity implements VideoListCall
             setTitle(getString(R.string.label_my_videos));
         }
 
-        try{
-            if(recentVideosFragment!=null){
-                recentVideosFragment.setCallback(this);
-            }
-            clearDownloadCount();
-        }catch(Exception ex){
-            logger.error(ex);
+        if (recentVideosFragment != null) {
+            recentVideosFragment.setCallback(this);
         }
     }
 
@@ -153,18 +136,6 @@ public class MyVideosTabActivity extends PlayerActivity implements VideoListCall
             }
         } catch(Exception ex) {
             logger.error(ex);
-        }
-    }
-
-    private void clearDownloadCount() {
-        try{
-            PrefManager p = new PrefManager(this, PrefManager.Pref.LOGIN);
-            // user specific data is stored in his own file
-            ProfileModel profile = p.getCurrentUserProfile();
-            p = new PrefManager(this, profile.username);
-            p.put(PrefManager.Key.COUNT_OF_VIDEOS_DOWNLOADED, 0);
-        }catch(Exception e){
-            logger.error(e);
         }
     }
 
@@ -351,29 +322,21 @@ public class MyVideosTabActivity extends PlayerActivity implements VideoListCall
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
         super.onCreateOptionsMenu(menu);
-        try{
-            MenuItem checkBox_menuItem = menu.findItem(R.id.delete_checkbox);
-            View checkBoxView = checkBox_menuItem.getActionView();
-            myVideocheckBox = (CheckBox) checkBoxView
-                    .findViewById(R.id.select_checkbox);
-            if(videoCheckListener==null) {
-                videoCheckListener = new VideoTabCheckBoxListener();
+        getMenuInflater().inflate(R.menu.video_list, menu);
+        MenuItem checkBox_menuItem = menu.findItem(R.id.delete_checkbox);
+        View checkBoxView = checkBox_menuItem.getActionView();
+        myVideocheckBox = (CheckBox) checkBoxView.findViewById(R.id.select_checkbox);
+        if (videoCheckListener == null) {
+            videoCheckListener = new VideoTabCheckBoxListener();
+        }
+        if (AppConstants.myVideosDeleteMode && !(mCurrentTab
+                .equalsIgnoreCase(getString(R.string.tab_my_all_videos)))) {
+            checkBox_menuItem.setVisible(true);
+            if (AppConstants.myVideosDeleteMode) {
+                myVideocheckBox.setOnCheckedChangeListener(videoCheckListener);
             }
-            if (AppConstants.myVideosDeleteMode && !(mCurrentTab
-                    .equalsIgnoreCase(getString(R.string.tab_my_all_videos)))) {
-                checkBox_menuItem.setVisible(true);
-                //checkBox.setVisibility(View.VISIBLE);
-                if (AppConstants.myVideosDeleteMode) {
-                    myVideocheckBox.setOnCheckedChangeListener(videoCheckListener);
-                }else{
-                    myVideocheckBox.setOnCheckedChangeListener(null);
-                }
-            } else {
-                checkBox_menuItem.setVisible(false);
-                myVideocheckBox.setOnCheckedChangeListener(null);
-            }
-        }catch(Exception e){
-            logger.error(e);
+        } else {
+            checkBox_menuItem.setVisible(false);
         }
         return true;
     }
@@ -387,65 +350,41 @@ public class MyVideosTabActivity extends PlayerActivity implements VideoListCall
             if (isChecked == lastIsChecked) {
                 return;
             }
-            try{
-                lastIsChecked = isChecked;
-                if (mCurrentTab
-                        .equalsIgnoreCase(getString(R.string.tab_my_recent_videos))) {
-                    if (isChecked) {
-                        recentVideosFragment.setAllVideosSectionChecked();
-                        try{
-                            myVideocheckBox.setButtonDrawable(R.drawable.ic_checkbox_active);
-                            //myVideocheckBox.setBackgroundResource(R.drawable.ic_checkbox_active);
-                        }catch(Exception e){
-                            logger.error(e);
-                        }
-
-                    } else {
-                        recentVideosFragment.unsetAllVideosSectionChecked();
-                        myVideocheckBox.setButtonDrawable(R.drawable.ic_checkbox_default);
-                        //myVideocheckBox.setBackgroundResource(R.drawable.ic_checkbox_default);
-                    }
+            lastIsChecked = isChecked;
+            if (mCurrentTab.equalsIgnoreCase(getString(R.string.tab_my_recent_videos))) {
+                if (isChecked) {
+                    recentVideosFragment.setAllVideosSectionChecked();
+                    myVideocheckBox.setButtonDrawable(R.drawable.ic_checkbox_active);
+                } else {
+                    recentVideosFragment.unsetAllVideosSectionChecked();
+                    myVideocheckBox.setButtonDrawable(R.drawable.ic_checkbox_default);
                 }
-            }catch(Exception e){
-                logger.error(e);
             }
         }
     }
 
     @Override
     protected void onOffline() {
-        try{
-            AppConstants.offline_flag = true;
-            if (mCurrentTab
-                    .equalsIgnoreCase(getString(R.string.tab_my_recent_videos))) {
-                recentVideosFragment.onOffline();
-            }
-            if (playerFragment != null) {
-                playerFragment.onOffline();
-            }
-            offlineBar.setVisibility(View.VISIBLE);
-            invalidateOptionsMenu();
-        }catch(Exception ex){
-            logger.error(ex);
+        super.onOffline();
+        if (mCurrentTab.equalsIgnoreCase(getString(R.string.tab_my_recent_videos))) {
+            recentVideosFragment.onOffline();
         }
+        if (playerFragment != null) {
+            playerFragment.onOffline();
+        }
+        offlineBar.setVisibility(View.VISIBLE);
     }
 
     @Override
     protected void onOnline() {
-        try{
-            AppConstants.offline_flag = false;
-            if (mCurrentTab
-                    .equalsIgnoreCase(getString(R.string.tab_my_recent_videos))) {
-                recentVideosFragment.onOnline();
-            }
-            if (playerFragment != null) {
-                playerFragment.onOnline();
-            }
-            offlineBar.setVisibility(View.GONE);
-            invalidateOptionsMenu();
-        }catch(Exception ex){
-            logger.error(ex);
+        super.onOnline();
+        if (mCurrentTab.equalsIgnoreCase(getString(R.string.tab_my_recent_videos))) {
+            recentVideosFragment.onOnline();
         }
+        if (playerFragment != null) {
+            playerFragment.onOnline();
+        }
+        offlineBar.setVisibility(View.GONE);
     }
 
     public void showCheckBox() {

@@ -42,13 +42,13 @@ public class ApiConstants {
 
     public static final String URL_EXCHANGE_ACCESS_TOKEN = "/oauth2/exchange_access_token/{backend}/";
 
-    public static final String URL_LAST_ACCESS_FOR_COURSE ="/api/mobile/v0.5/users/{username }/course_status_info/{courseId}";
+    public static final String URL_LAST_ACCESS_FOR_COURSE ="/api/mobile/v0.5/users/{username}/course_status_info/{courseId}";
 
     public static final String URL_REGISTRATION = "/user_api/v1/account/registration/";
 
     public static final String URL_ENROLLMENT = "/api/enrollment/v1/enrollment";
 
-    public static final String URL_COURSE_OUTLINE = "/api/course_structure/v0/courses/{courseId}/blocks+navigation/?block_count={block_count}&fields={fields}&block_json={block_json}";
+    public static final String URL_COURSE_OUTLINE = "/api/courses/v1/blocks/?course_id={courseId}&username={username}&depth=all&requested_fields={requested_fields}&student_view_data={student_view_data}&block_counts={block_counts}&nav_depth=3";
 
     public static final String HEADER_CACHE_CONTROL = "Cache-Control";
 

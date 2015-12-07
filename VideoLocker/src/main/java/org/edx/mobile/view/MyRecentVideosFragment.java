@@ -23,12 +23,12 @@ import org.edx.mobile.logger.Logger;
 import org.edx.mobile.model.api.ProfileModel;
 import org.edx.mobile.model.api.VideoResponseModel;
 import org.edx.mobile.model.db.DownloadEntry;
+import org.edx.mobile.module.analytics.ISegment;
 import org.edx.mobile.module.db.DataCallback;
 import org.edx.mobile.module.prefs.PrefManager;
 import org.edx.mobile.player.PlayerFragment;
 import org.edx.mobile.player.VideoListFragment.VideoListCallback;
 import org.edx.mobile.util.AppConstants;
-import org.edx.mobile.util.NetworkUtil;
 import org.edx.mobile.util.ResourceUtil;
 import org.edx.mobile.util.UiUtil;
 import org.edx.mobile.view.adapters.MyRecentVideoAdapter;
@@ -56,13 +56,8 @@ public class MyRecentVideosFragment extends MyVideosBaseFragment {
     public View onCreateView(LayoutInflater inflater, ViewGroup container,
             Bundle savedInstanceState) {
         super.onCreateView(inflater, container, savedInstanceState);
-        View view = inflater.inflate(R.layout.fragment_video_list_with_player_container,
-                null);
-        try{
-            environment.getSegment().screenViewsTracking("My Videos - Recent Videos");
-        }catch(Exception e){
-            logger.error(e);
-        }
+        View view = inflater.inflate(R.layout.fragment_video_list_with_player_container, null);
+        environment.getSegment().trackScreenView(ISegment.Screens.MY_VIDEOS_RECENT);
 
         return view;
     }
@@ -133,11 +128,6 @@ public class MyRecentVideosFragment extends MyVideosBaseFragment {
                 videoListView.setAdapter(adapter);
 
                 showDeletePanel(getView());
-                if (!(NetworkUtil.isConnected(getActivity().getBaseContext()))) {
-                    AppConstants.offline_flag = true;
-                } else {
-                    AppConstants.offline_flag = false;
-                }
 
                 videoListView.setOnItemClickListener(adapter);
             } else {
@@ -291,7 +281,6 @@ public class MyRecentVideosFragment extends MyVideosBaseFragment {
 
     public void onOffline() {
         try{
-            AppConstants.offline_flag = true;
             notifyAdapter();
             videoListView.setOnItemClickListener(adapter);
         }catch(Exception e){
@@ -301,7 +290,6 @@ public class MyRecentVideosFragment extends MyVideosBaseFragment {
 
     protected void onOnline() {
         try{
-            AppConstants.offline_flag = false;
             notifyAdapter();
             videoListView.setOnItemClickListener(adapter);
         }catch(Exception e){
@@ -469,9 +457,8 @@ public class MyRecentVideosFragment extends MyVideosBaseFragment {
             AppConstants.myVideosDeleteMode = false;
             ((MyVideosTabActivity) getActivity()).hideCheckBox();
             if(deletedVideoCount>0){
-                String format =  ResourceUtil.getFormattedStringForQuantity(R.plurals.deleted_video, "video_count", deletedVideoCount).toString();
                 UiUtil.showMessage(MyRecentVideosFragment.this.getView(),
-                        String.format(format, deletedVideoCount));
+                        ResourceUtil.getFormattedStringForQuantity(getResources(), R.plurals.deleted_video, "video_count", deletedVideoCount).toString());
             }
 
         }catch(Exception ex){

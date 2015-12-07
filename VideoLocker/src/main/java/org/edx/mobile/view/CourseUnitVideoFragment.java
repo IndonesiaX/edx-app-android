@@ -3,7 +3,6 @@ package org.edx.mobile.view;
 import android.app.ActionBar;
 import android.content.Intent;
 import android.content.res.Configuration;
-import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.support.v4.app.DialogFragment;
@@ -20,13 +19,15 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import com.google.inject.Inject;
+
 import org.edx.mobile.R;
+import org.edx.mobile.base.BaseFragmentActivity;
 import org.edx.mobile.logger.Logger;
 import org.edx.mobile.model.api.EnrolledCoursesResponse;
 import org.edx.mobile.model.api.LectureModel;
 import org.edx.mobile.model.api.ProfileModel;
 import org.edx.mobile.model.api.TranscriptModel;
-import org.edx.mobile.model.api.VideoResponseModel;
 import org.edx.mobile.model.course.CourseComponent;
 import org.edx.mobile.model.course.VideoBlockModel;
 import org.edx.mobile.model.db.DownloadEntry;
@@ -77,6 +78,9 @@ public class CourseUnitVideoFragment extends CourseUnitFragment
     private final Handler playHandler = new Handler();
     private View messageContainer;
 
+    @Inject
+    TranscriptManager transcriptManager;
+
 
     /**
      * Create a new instance of fragment
@@ -101,7 +105,6 @@ public class CourseUnitVideoFragment extends CourseUnitFragment
         setRetainInstance(true);
         unit = getArguments() == null ? null :
             (VideoBlockModel) getArguments().getSerializable(Router.EXTRA_COURSE_UNIT);
-
     }
 
     /**
@@ -156,17 +159,6 @@ public class CourseUnitVideoFragment extends CourseUnitFragment
 
         if(getResources().getConfiguration().orientation == Configuration.ORIENTATION_PORTRAIT) {
             isLandscape = false;
-
-
-            if (!(NetworkUtil.isConnected(getActivity()))) {
-
-                AppConstants.offline_flag = true;
-            } else {
-
-                AppConstants.offline_flag = false;
-            }
-
-
         } else {
             isLandscape = true;
             // probably the landscape player view, so hide action bar
@@ -281,13 +273,13 @@ public class CourseUnitVideoFragment extends CourseUnitFragment
                         }
                         @Override
                         public void onNegativeClicked() {
-                            ((VideoListActivity) getActivity()).showInfoMessage(getString(R.string.wifi_off_message));
+                            ((BaseFragmentActivity) getActivity()).showInfoMessage(getString(R.string.wifi_off_message));
                             notifyAdapter();
                         }
                     };
                     MediaConsentUtils.consentToMediaPlayback(getActivity(), dialogCallback, environment.getConfig());
                 }else{
-                    if (  AppConstants.offline_flag ){
+                    if (  !NetworkUtil.isConnected(getActivity()) ){
                         //TODO - should use interface to decouple
                         ((CourseBaseActivity) getActivity())
                             .showOfflineAccessMessage();
@@ -323,7 +315,7 @@ public class CourseUnitVideoFragment extends CourseUnitFragment
         long downloadSize = videoData.size;
         if (downloadSize > MemoryUtil
             .getAvailableExternalMemory(getActivity())) {
-            ((VideoListActivity) getActivity())
+            ((BaseFragmentActivity) getActivity())
                 .showInfoMessage(getString(R.string.file_size_exceeded));
             notifyAdapter();
         } else {
@@ -380,7 +372,6 @@ public class CourseUnitVideoFragment extends CourseUnitFragment
 
 
             try {
-                updateLastAccess(video);
                 // capture chapter name
                 if (chapterName == null) {
                     // capture the chapter name of this video
@@ -393,18 +384,6 @@ public class CourseUnitVideoFragment extends CourseUnitFragment
             }
         }catch(Exception ex){
             logger.error(ex);
-        }
-    }
-
-    private void updateLastAccess(DownloadEntry video){
-        try {
-            String prefName = PrefManager.getPrefNameForLastAccessedBy(getProfile()
-                .username, video.eid);
-            PrefManager prefManager = new PrefManager(getActivity(), prefName);
-            VideoResponseModel vrm = environment.getServiceManager().getVideoById(video.eid, video.videoId);
-            prefManager.putLastAccessedSubsection(vrm.getSection().getId(), false);
-        } catch (Exception e) {
-            logger.error(e);
         }
     }
 
@@ -494,7 +473,7 @@ public class CourseUnitVideoFragment extends CourseUnitFragment
 
     private void showOpenInBrowserPanel() {
         try {
-            if (!AppConstants.offline_flag) {
+            if (NetworkUtil.isConnected(getActivity())) {
                 if (isPlayerVisible()) {
                     hideOpenInBrowserPanel();
                 } else {
@@ -512,7 +491,7 @@ public class CourseUnitVideoFragment extends CourseUnitFragment
                     openInBrowserTv.setOnClickListener(new View.OnClickListener() {
                         @Override
                         public void onClick(View v) {
-                            new BrowserUtil().open(getActivity(),
+                            BrowserUtil.open(getActivity(),
                                 urlStringBuffer.toString());
                         }
                     });
@@ -528,8 +507,6 @@ public class CourseUnitVideoFragment extends CourseUnitFragment
 
     public void onOffline() {
         if (!isLandscape) {
-            AppConstants.offline_flag = true;
-
             hideOpenInBrowserPanel();
             if (!myVideosFlag) {
 
@@ -539,7 +516,6 @@ public class CourseUnitVideoFragment extends CourseUnitFragment
 
 
     public void onOnline() {
-        AppConstants.offline_flag = false;
         if (!isLandscape) {
 
             if (!myVideosFlag) {
@@ -592,7 +568,7 @@ public class CourseUnitVideoFragment extends CourseUnitFragment
         public void handleMessage(android.os.Message msg) {
             if (msg.what == MSG_UPDATE_PROGRESS) {
                 if (isActivityStarted()) {
-                    if (!AppConstants.offline_flag) {
+                    if (NetworkUtil.isConnected(getActivity())) {
 
                         sendEmptyMessageDelayed(MSG_UPDATE_PROGRESS, 3000);
                     }
@@ -694,20 +670,18 @@ public class CourseUnitVideoFragment extends CourseUnitFragment
                 }
 
                 if (environment.getStorage().addDownload(downloadEntry) != -1) {
-                    ((VideoListActivity) getActivity())
+                    ((BaseFragmentActivity) getActivity())
                         .showInfoMessage(getString(R.string.msg_started_one_video_download));
                 } else {
-                    ((VideoListActivity) getActivity())
+                    ((BaseFragmentActivity) getActivity())
                         .showInfoMessage(getString(R.string.msg_video_not_downloaded));
                 }
-                ((VideoListActivity) getActivity()).updateProgress();
 
                 //If the video is already downloaded, dont reload the adapter
                 if (reloadListFlag) {
                     //adapter.notifyDataSetChanged();
                 }
-                TranscriptManager transManager = new TranscriptManager(getActivity());
-                transManager.downloadTranscriptsForVideo(downloadEntry.transcript);
+                transcriptManager.downloadTranscriptsForVideo(downloadEntry.transcript);
 
         }catch(Exception e){
             logger.error(e);
@@ -803,19 +777,14 @@ public class CourseUnitVideoFragment extends CourseUnitFragment
      * mostly the orientation changes.
      * @param newConfig
      */
+    @Override
     public void onConfigurationChanged(Configuration newConfig) {
         super.onConfigurationChanged(newConfig);
         //TODO - should we use load different layout file?
         if (getResources().getConfiguration().orientation == Configuration.ORIENTATION_LANDSCAPE) {
             messageContainer.setVisibility(View.GONE);
-            if (Build.VERSION.SDK_INT < 16) {
-                getActivity().getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN,
+            getActivity().getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN,
                     WindowManager.LayoutParams.FLAG_FULLSCREEN);
-            } else {
-                View decorView = getActivity().getWindow().getDecorView();
-                int uiOptions = View.SYSTEM_UI_FLAG_FULLSCREEN;
-                decorView.setSystemUiVisibility(uiOptions);
-            }
 
             LinearLayout playerContainer = (LinearLayout)getView().findViewById(R.id.player_container);
             if ( playerContainer != null ) {
@@ -827,13 +796,7 @@ public class CourseUnitVideoFragment extends CourseUnitFragment
             }
         } else {
             messageContainer.setVisibility(View.VISIBLE);
-            if (Build.VERSION.SDK_INT < 16) {
-                getActivity().getWindow().setFlags(WindowManager.LayoutParams.FLAG_FORCE_NOT_FULLSCREEN,
-                    WindowManager.LayoutParams.FLAG_FORCE_NOT_FULLSCREEN);
-            } else {
-                View decorView = getActivity().getWindow().getDecorView();
-                decorView.setSystemUiVisibility(View.VISIBLE);
-            }
+            getActivity().getWindow().clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
 
             LinearLayout playerContainer = (LinearLayout)getView().findViewById(R.id.player_container);
             if ( playerContainer != null ) {

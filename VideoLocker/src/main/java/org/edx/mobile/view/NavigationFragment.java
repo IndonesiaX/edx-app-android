@@ -4,6 +4,8 @@ import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
 import android.os.Bundle;
+import android.support.annotation.NonNull;
+import android.support.annotation.Nullable;
 import android.support.v4.app.DialogFragment;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -11,9 +13,14 @@ import android.view.View.OnClickListener;
 import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.CompoundButton;
+import android.widget.FrameLayout;
+import android.widget.ImageView;
 import android.widget.Switch;
 import android.widget.TextView;
 
+import com.bumptech.glide.Glide;
+import com.bumptech.glide.RequestManager;
+import com.bumptech.glide.load.engine.DiskCacheStrategy;
 import com.facebook.Session;
 import com.facebook.SessionState;
 import com.google.inject.Inject;
@@ -21,17 +28,23 @@ import com.google.inject.Inject;
 import org.edx.mobile.R;
 import org.edx.mobile.base.BaseFragmentActivity;
 import org.edx.mobile.core.IEdxEnvironment;
+import org.edx.mobile.event.ProfilePhotoUpdatedEvent;
 import org.edx.mobile.logger.Logger;
 import org.edx.mobile.model.api.ProfileModel;
 import org.edx.mobile.module.analytics.ISegment;
 import org.edx.mobile.module.facebook.IUiLifecycleHelper;
 import org.edx.mobile.module.prefs.PrefManager;
+import org.edx.mobile.user.Account;
+import org.edx.mobile.user.GetAccountTask;
+import org.edx.mobile.user.ProfileImage;
+import org.edx.mobile.util.Config;
 import org.edx.mobile.util.EmailUtil;
 import org.edx.mobile.util.PropertyUtil;
 import org.edx.mobile.view.dialog.FindCoursesDialogFragment;
 import org.edx.mobile.view.dialog.IDialogCallback;
 import org.edx.mobile.view.dialog.NetworkCheckDialogFragment;
 
+import de.greenrobot.event.EventBus;
 import roboguice.fragment.RoboFragment;
 
 
@@ -41,6 +54,9 @@ public class NavigationFragment extends RoboFragment {
 
     @Inject
     IEdxEnvironment environment;
+
+    @Inject
+    Config config;
 
     private PrefManager pref;
     private final Logger logger = new Logger(getClass().getName());
@@ -54,27 +70,89 @@ public class NavigationFragment extends RoboFragment {
         }
     };
 
+    @Nullable
+    private GetAccountTask getAccountTask;
+
+    @Nullable
+    private ProfileImage profileImage;
+
+    ProfileModel profile;
+
+    @Nullable
+    ImageView imageView;
+
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         uiLifecycleHelper = IUiLifecycleHelper.Factory.getInstance(getActivity(), callback);
         uiLifecycleHelper.onCreate(savedInstanceState);
+        Context context = getActivity().getBaseContext();
+        socialPref = new PrefManager(context, PrefManager.Pref.FEATURES);
+        pref = new PrefManager(context, PrefManager.Pref.LOGIN);
+        profile = pref.getCurrentUserProfile();
+        if (config.isUserProfilesEnabled() && profile != null && profile.username != null) {
+            getAccountTask = new GetAccountTask(getActivity(), profile.username) {
+                @Override
+                protected void onSuccess(@NonNull Account account) throws Exception {
+                    NavigationFragment.this.profileImage = account.getProfileImage();
+                    if (null != imageView) {
+                        loadProfileImage(account.getProfileImage(), imageView);
+                    }
+                }
+            };
+            getAccountTask.setTaskProcessCallback(null); // Disable global loading indicator
+            getAccountTask.execute();
+        }
+        EventBus.getDefault().register(this);
+    }
+
+    private void loadProfileImage(@NonNull ProfileImage profileImage, @NonNull ImageView imageView) {
+        if (profileImage.hasImage()) {
+            Glide.with(NavigationFragment.this)
+                    .load(profileImage.getImageUrlLarge())
+                    .into(imageView);
+        } else {
+            imageView.setImageResource(R.drawable.xsie);
+        }
     }
 
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container,
-            Bundle savedInstanceState) {
-        super.onCreateView(inflater, container, savedInstanceState);
-        Context context = getActivity().getBaseContext();
+                             Bundle savedInstanceState) {
+        final View layout = inflater.inflate(R.layout.drawer_navigation, container, false);
 
-        socialPref = new PrefManager(context, PrefManager.Pref.FEATURES);
+        final TextView name_tv = (TextView) layout.findViewById(R.id.name_tv);
+        final TextView email_tv = (TextView) layout.findViewById(R.id.email_tv);
+        final FrameLayout nameLayout = (FrameLayout) layout.findViewById(R.id.name_layout);
+        imageView = (ImageView) layout.findViewById(R.id.profile_image);
+        if (config.isUserProfilesEnabled()) {
+            if (null != profileImage) {
+                loadProfileImage(profileImage, imageView);
+            }
+            if (profile != null && profile.username != null) {
+                nameLayout.setOnClickListener(new OnClickListener() {
+                    @Override
+                    public void onClick(View v) {
+                        final BaseFragmentActivity act = (BaseFragmentActivity) getActivity();
+                        act.closeDrawer();
 
-        pref = new PrefManager(context, PrefManager.Pref.LOGIN);
+                        if (!(act instanceof UserProfileActivity)) {
+                            environment.getRouter().showUserProfileWithNavigationDrawer(getActivity(), profile.username);
 
-        View layout = inflater.inflate(R.layout.drawer_navigation, null);
+                            if (!(act instanceof MyCoursesListActivity)) {
+                                act.finish();
+                            }
+                        }
+                    }
+                });
+            }
+        } else {
+            imageView.setVisibility(View.GONE);
 
-        TextView name_tv = (TextView) layout.findViewById(R.id.name_tv);
-        TextView email_tv = (TextView) layout.findViewById(R.id.email_tv);
+            // Disable any on-tap effects
+            nameLayout.setClickable(false);
+            nameLayout.setForeground(null);
+        }
 
         TextView tvMyCourses = (TextView) layout.findViewById(R.id.drawer_option_my_courses);
         tvMyCourses.setOnClickListener(new OnClickListener() {
@@ -111,42 +189,39 @@ public class NavigationFragment extends RoboFragment {
         });
 
 
-            TextView tvFindCourses = (TextView) layout.findViewById(R.id.drawer_option_find_courses);
-            tvFindCourses.setOnClickListener(new OnClickListener() {
-                @Override
-                public void onClick(View v) {
-                    try {
-                        ISegment segIO = environment.getSegment();
-                        segIO.trackUserFindsCourses();
-                    } catch (Exception e) {
-                        logger.error(e);
-                    }
-                    Activity act = getActivity();
-                    ((BaseFragmentActivity) act).closeDrawer();
-                    if (environment.getConfig().getEnrollmentConfig().isEnabled()) {
-                        if (!(act instanceof FindCoursesActivity)) {
-                            environment.getRouter().showFindCourses(act);
+        TextView tvFindCourses = (TextView) layout.findViewById(R.id.drawer_option_find_courses);
+        tvFindCourses.setVisibility(View.GONE);
+        tvFindCourses.setOnClickListener(new OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                ISegment segIO = environment.getSegment();
+                segIO.trackUserFindsCourses();
+                Activity act = getActivity();
+                ((BaseFragmentActivity) act).closeDrawer();
+                if (environment.getConfig().getEnrollmentConfig().isEnabled()) {
+                    if (!(act instanceof FindCoursesActivity)) {
+                        environment.getRouter().showFindCourses(act);
 
-                            //Finish need not be called if the current activity is MyCourseListing
-                            // as on returning back from FindCourses,
-                            // the student should be returned to the MyCourses screen
-                            if (!(act instanceof MyCoursesListActivity)) {
-                                act.finish();
-                            }
+                        //Finish need not be called if the current activity is MyCourseListing
+                        // as on returning back from FindCourses,
+                        // the student should be returned to the MyCourses screen
+                        if (!(act instanceof MyCoursesListActivity)) {
+                            act.finish();
                         }
-                    } else {
-                        //Show the dialog only if the activity is started. This is to avoid Illegal state
-                        //exceptions if the dialog fragment tries to show even if the application is not in foreground
-                        if (isAdded() && isVisible()) {
-                            FindCoursesDialogFragment findCoursesFragment = new FindCoursesDialogFragment();
-                            findCoursesFragment.setStyle(DialogFragment.STYLE_NORMAL,
-                                    android.R.style.Theme_Black_NoTitleBar_Fullscreen);
-                            findCoursesFragment.setCancelable(false);
-                            findCoursesFragment.show(getFragmentManager(), "dialog-find-courses");
-                        }
+                    }
+                } else {
+                    //Show the dialog only if the activity is started. This is to avoid Illegal state
+                    //exceptions if the dialog fragment tries to show even if the application is not in foreground
+                    if (isAdded() && isVisible()) {
+                        FindCoursesDialogFragment findCoursesFragment = new FindCoursesDialogFragment();
+                        findCoursesFragment.setStyle(DialogFragment.STYLE_NORMAL,
+                                android.R.style.Theme_Black_NoTitleBar_Fullscreen);
+                        findCoursesFragment.setCancelable(false);
+                        findCoursesFragment.show(getFragmentManager(), "dialog-find-courses");
                     }
                 }
-            });
+            }
+        });
 
         TextView tvMyGroups = (TextView) layout.findViewById(R.id.drawer_option_my_groups);
         tvMyGroups.setOnClickListener(new OnClickListener() {
@@ -173,7 +248,7 @@ public class NavigationFragment extends RoboFragment {
                 Activity act = getActivity();
                 ((BaseFragmentActivity) act).closeDrawer();
 
-                if ( !(act instanceof SettingsActivity)) {
+                if (!(act instanceof SettingsActivity)) {
                     environment.getRouter().showSettings(act);
 
                     if (!(act instanceof MyCoursesListActivity)) {
@@ -195,12 +270,11 @@ public class NavigationFragment extends RoboFragment {
         });
 
 
-        ProfileModel profile = pref.getCurrentUserProfile();
-        if(profile != null) {
-            if(profile.name != null) {
+        if (profile != null) {
+            if (profile.name != null) {
                 name_tv.setText(profile.name);
             }
-            if(profile.email != null) {
+            if (profile.email != null) {
                 email_tv.setText(profile.email);
             }
         }
@@ -210,24 +284,22 @@ public class NavigationFragment extends RoboFragment {
 
             @Override
             public void onClick(View v) {
-            environment.getRouter().forceLogout(getActivity(), environment.getSegment(), environment.getNotificationDelegate());
+                environment.getRouter().forceLogout(getActivity(), environment.getSegment(), environment.getNotificationDelegate());
             }
         });
 
 
-        
-
         TextView version_tv = (TextView) layout.findViewById(R.id.tv_version_no);
-        try{
+        try {
             String versionName = PropertyUtil.getManifestVersionName(getActivity());
 
-            if(versionName != null) {
+            if (versionName != null) {
                 String envDisplayName = environment.getConfig().getEnvironmentDisplayName();
                 String text = String.format("%s %s %s",
                         getString(R.string.label_version), versionName, envDisplayName);
                 version_tv.setText(text);
             }
-        }catch(Exception e) {
+        } catch (Exception e) {
             logger.error(e);
         }
 
@@ -239,10 +311,14 @@ public class NavigationFragment extends RoboFragment {
         super.onResume();
         uiLifecycleHelper.onResume();
 
-        if (getView() != null){
-            TextView groups_tv = (TextView) getView().findViewById(R.id.drawer_option_my_groups);
+        if (getView() != null) {
+            View groupsItemView = getView().findViewById(R.id.drawer_option_my_groups);
             boolean allowSocialFeatures = socialPref.getBoolean(PrefManager.Key.ALLOW_SOCIAL_FEATURES, true);
-            groups_tv.setVisibility(allowSocialFeatures ? View.VISIBLE : View.GONE);
+            groupsItemView.setVisibility(allowSocialFeatures ? View.VISIBLE : View.GONE);
+
+            View findCoursesItemView = getView().findViewById(R.id.drawer_option_find_courses);
+            boolean findCoursesEnabled = environment.getConfig().getEnrollmentConfig().isEnabled();
+            findCoursesItemView.setVisibility(findCoursesEnabled ? View.VISIBLE : View.GONE);
         }
 
     }
@@ -263,6 +339,16 @@ public class NavigationFragment extends RoboFragment {
     public void onDestroy() {
         super.onDestroy();
         uiLifecycleHelper.onDestroy();
+        if (null != getAccountTask) {
+            getAccountTask.cancel(true);
+        }
+        EventBus.getDefault().unregister(this);
+    }
+
+    @Override
+    public void onDestroyView() {
+        super.onDestroyView();
+        imageView = null;
     }
 
     @Override
@@ -287,22 +373,37 @@ public class NavigationFragment extends RoboFragment {
 
     private void updateWifiSwitch(View layout) {
         final PrefManager wifiPrefManager = new PrefManager(
-                getActivity().getBaseContext(),PrefManager.Pref.WIFI);
+                getActivity().getBaseContext(), PrefManager.Pref.WIFI);
         Switch wifi_switch = (Switch) layout.findViewById(R.id.wifi_setting);
-        
+
         wifi_switch.setOnCheckedChangeListener(null);
-        wifi_switch.setChecked(wifiPrefManager.getBoolean(PrefManager.Key.DOWNLOAD_ONLY_ON_WIFI,true));
+        wifi_switch.setChecked(wifiPrefManager.getBoolean(PrefManager.Key.DOWNLOAD_ONLY_ON_WIFI, true));
         wifi_switch.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
 
             @Override
             public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
-                if(isChecked){
+                if (isChecked) {
                     wifiPrefManager.put(PrefManager.Key.DOWNLOAD_ONLY_ON_WIFI, true);
-                }else{
+                } else {
                     showWifiDialog();
                 }
             }
         });
+    }
+
+    @SuppressWarnings("unused")
+    public void onEventMainThread(@NonNull ProfilePhotoUpdatedEvent event) {
+        if (event.getUsername().equalsIgnoreCase(profile.username)) {
+            if (null == event.getUri()) {
+                imageView.setImageResource(R.drawable.xsie);
+            } else {
+                Glide.with(NavigationFragment.this)
+                        .load(event.getUri())
+                        .skipMemoryCache(true) // URI is re-used in subsequent events; disable caching
+                        .diskCacheStrategy(DiskCacheStrategy.NONE)
+                        .into(imageView);
+            }
+        }
     }
 
     protected void showWifiDialog() {
@@ -314,22 +415,22 @@ public class NavigationFragment extends RoboFragment {
                             (getActivity().getBaseContext(), PrefManager.Pref.WIFI);
                     wifiPrefManager.put(PrefManager.Key.DOWNLOAD_ONLY_ON_WIFI, false);
                     updateWifiSwitch(getView());
-                } catch(Exception ex) {
+                } catch (Exception ex) {
                     logger.error(ex);
                 }
             }
-            
+
             @Override
             public void onNegativeClicked() {
                 try {
                     PrefManager wifiPrefManager = new PrefManager(
-                            getActivity().getBaseContext(),PrefManager.Pref.WIFI);
-                    
+                            getActivity().getBaseContext(), PrefManager.Pref.WIFI);
+
                     wifiPrefManager.put(PrefManager.Key.DOWNLOAD_ONLY_ON_WIFI, true);
                     wifiPrefManager.put(PrefManager.Key.DOWNLOAD_OFF_WIFI_SHOW_DIALOG_FLAG, true);
 
                     updateWifiSwitch(getView());
-                } catch(Exception ex) {
+                } catch (Exception ex) {
                     logger.error(ex);
                 }
             }

@@ -26,17 +26,17 @@ public class BlockModel implements Serializable{
     @SerializedName("graded")
     public boolean graded;
 
-    @SerializedName("responsive_ui")
-    public boolean responsiveUI;
+    @SerializedName("student_view_multi_device")
+    public boolean studentViewMultiDevice;
 
-    @SerializedName("block_url")
-    public String blockUrl;
+    @SerializedName("student_view_url")
+    public String studentViewUrl;
 
-    @SerializedName("block_count")
-    public BlockCount blockCount;
+    @SerializedName("block_counts")
+    public BlockCount blockCounts;
 
-    @SerializedName("web_url")
-    public String webUrl;
+    @SerializedName("lms_web_url")
+    public String lmsWebUrl;
 
     @SerializedName("format")
     public String format;
@@ -47,10 +47,10 @@ public class BlockModel implements Serializable{
     @SerializedName("descendants")
     public List<String> descendants;
 
-    @SerializedName("block_json")
+    @SerializedName("student_view_data")
     public BlockData data;
 
     public boolean isContainer(){
-        return descendants != null && descendants.size() > 0;
+        return type != null ? type.isContainer() : (descendants != null && descendants.size() > 0);
     }
 }

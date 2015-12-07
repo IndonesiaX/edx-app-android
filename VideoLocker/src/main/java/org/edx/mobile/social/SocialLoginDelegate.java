@@ -18,10 +18,12 @@ import org.edx.mobile.social.facebook.FacebookProvider;
 import org.edx.mobile.social.google.GoogleOauth2;
 import org.edx.mobile.social.google.GoogleProvider;
 import org.edx.mobile.task.Task;
-import org.edx.mobile.util.AppConstants;
 import org.edx.mobile.util.Config;
+import org.edx.mobile.util.NetworkUtil;
+import org.edx.mobile.util.ResourceUtil;
 import org.edx.mobile.view.ICommonUI;
 
+import java.util.HashMap;
 
 
 /**
@@ -211,21 +213,25 @@ public class SocialLoginDelegate {
 
                 // do SOCIAL LOGIN first
                 AuthResponse social = null;
+                HashMap<String, CharSequence> descParams = new HashMap<>();
+                String platformName = environment.getConfig().getPlatformName();
+                descParams.put("platform_name", environment.getConfig().getPlatformName());
+                descParams.put("platform_destination", environment.getConfig().getPlatformDestinationName());
                 if (backend.equalsIgnoreCase(PrefManager.Value.BACKEND_FACEBOOK)) {
                     social = api.loginByFacebook(accessToken);
 
                     if ( social.error != null && social.error.equals("401") ) {
-                        throw new LoginException(new LoginErrorMessage(
-                                context.getString(R.string.error_account_not_linked_title_fb),
-                                context.getString(R.string.error_account_not_linked_desc_fb)));
+                        CharSequence title = ResourceUtil.getFormattedString(context.getResources(), R.string.error_account_not_linked_title_fb, descParams);
+                        CharSequence desc = ResourceUtil.getFormattedString(context.getResources(), R.string.error_account_not_linked_desc_fb, descParams);
+                        throw new LoginException(new LoginErrorMessage(title.toString(), desc.toString()));
                     }
                 } else if (backend.equalsIgnoreCase(PrefManager.Value.BACKEND_GOOGLE)) {
                     social = api.loginByGoogle(accessToken);
 
                     if ( social.error != null && social.error.equals("401") ) {
-                        throw new LoginException(new LoginErrorMessage(
-                                context.getString(R.string.error_account_not_linked_title_google),
-                                context.getString(R.string.error_account_not_linked_desc_google)));
+                        CharSequence title = ResourceUtil.getFormattedString(context.getResources(), R.string.error_account_not_linked_title_google, descParams);
+                        CharSequence desc = ResourceUtil.getFormattedString(context.getResources(), R.string.error_account_not_linked_desc_google, descParams);
+                        throw new LoginException(new LoginErrorMessage(title.toString(), desc.toString()));
                     }
                 }
 
@@ -262,7 +268,7 @@ public class SocialLoginDelegate {
         }
         @Override
         public void onClick(View v) {
-            if (AppConstants.offline_flag) {
+            if (!NetworkUtil.isConnected(activity)) {
                 callback.showErrorMessage(activity.getString(R.string.no_connectivity),
                         activity.getString(R.string.network_not_connected));
             } else {
@@ -304,7 +310,7 @@ public class SocialLoginDelegate {
         void onSocialLoginSuccess(String accessToken, String backend, Task task);
         void onUserLoginFailure(Exception ex, String accessToken, String backend);
         void onUserLoginSuccess(ProfileModel profile) throws LoginException;
-        void showErrorMessage(String header, String message);
+        boolean showErrorMessage(String header, String message);
     }
 
     public interface SocialUserInfoCallback{

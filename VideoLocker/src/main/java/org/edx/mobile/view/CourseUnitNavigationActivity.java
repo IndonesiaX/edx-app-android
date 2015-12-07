@@ -22,6 +22,7 @@ import org.edx.mobile.model.course.BlockType;
 import org.edx.mobile.model.course.CourseComponent;
 import org.edx.mobile.model.course.HtmlBlockModel;
 import org.edx.mobile.model.course.VideoBlockModel;
+import org.edx.mobile.module.analytics.ISegment;
 import org.edx.mobile.module.prefs.PrefManager;
 import org.edx.mobile.services.ViewPagerDownloadManager;
 import org.edx.mobile.view.common.PageViewStateCallback;
@@ -81,17 +82,17 @@ public class CourseUnitNavigationActivity extends CourseBaseActivity implements 
 
             @Override
             public void onPageScrollStateChanged(int state) {
-                if ( state == ViewPager.SCROLL_STATE_DRAGGING ){
+                if (state == ViewPager.SCROLL_STATE_DRAGGING) {
                     int curIndex = pager.getCurrentItem();
                     PageViewStateCallback curView = (PageViewStateCallback) pagerAdapter.instantiateItem(pager, curIndex);
-                    if( curView != null )
+                    if (curView != null)
                         curView.onPageDisappear();
                 }
-                if ( state == ViewPager.SCROLL_STATE_IDLE ){
+                if (state == ViewPager.SCROLL_STATE_IDLE) {
                     int curIndex = pager.getCurrentItem();
                     PageViewStateCallback curView = (PageViewStateCallback) pagerAdapter.instantiateItem(pager, curIndex);
-                     if( curView != null )
-                         curView.onPageShow();
+                    if (curView != null)
+                        curView.onPageShow();
                     tryToUpdateForEndOfSequential();
                 }
             }
@@ -125,20 +126,16 @@ public class CourseUnitNavigationActivity extends CourseBaseActivity implements 
         });
 
         updateUIForOrientation();
-
-        updateDataModel();
-        
         setApplyPrevTransitionOnRestart(true);
-
-        try{
-            environment.getSegment().screenViewsTracking("Assessment");
-        }catch(Exception e){
-            logger.error(e);
-        }
-
     }
 
+    @Override
+    protected void onLoadData() {
+        selectedUnit = courseManager.getComponentById(courseData.getCourse().getId(), courseComponentId);
+        updateDataModel();
+    }
 
+    @Override
     protected  String getUrlForWebView(){
         if ( selectedUnit == null ){
             return ""; //wont happen
@@ -152,16 +149,20 @@ public class CourseUnitNavigationActivity extends CourseBaseActivity implements 
         if ( this.selectedUnit == null  )
             return;
 
+        courseComponentId = selectedUnit.getId();
         environment.getDatabase().updateAccess(null, selectedUnit.getId(), true);
 
-        CourseComponent parent = component.getParent();
         String prefName = PrefManager.getPrefNameForLastAccessedBy(getProfile()
             .username, selectedUnit.getCourseId());
         final PrefManager prefManager = new PrefManager(MainApplication.instance(), prefName);
-        prefManager.putLastAccessedSubsection(parent.getId(), false);
+        prefManager.putLastAccessedSubsection(this.selectedUnit.getId(), false);
         Intent resultData = new Intent();
-        resultData.putExtra(Router.EXTRA_COURSE_UNIT, selectedUnit);
+        resultData.putExtra(Router.EXTRA_COURSE_COMPONENT_ID, courseComponentId);
         setResult(RESULT_OK, resultData);
+
+        environment.getSegment().trackScreenView(
+                ISegment.Screens.UNIT_DETAIL, courseData.getCourse().getId(), selectedUnit.getInternalName());
+        environment.getSegment().trackCourseComponentViewed(selectedUnit.getId(), courseData.getCourse().getId());
     }
 
     private void tryToUpdateForEndOfSequential(){
@@ -186,7 +187,7 @@ public class CourseUnitNavigationActivity extends CourseBaseActivity implements 
                 mNextBtn.setText(R.string.assessment_next);
             }
             else {
-                mNextUnitLbl.setText(unitList.get(curIndex + 1).getParent().getName());
+                mNextUnitLbl.setText(unitList.get(curIndex + 1).getParent().getDisplayName());
                 mNextUnitLbl.setVisibility(View.VISIBLE);
                 mNextBtn.setText(R.string.assessment_next_unit);
             }
@@ -204,7 +205,7 @@ public class CourseUnitNavigationActivity extends CourseBaseActivity implements 
                 mPreviousBtn.setText(R.string.assessment_previous);
             }
             else {
-                mPreviousUnitLbl.setText(unitList.get(curIndex - 1).getParent().getName());
+                mPreviousUnitLbl.setText(unitList.get(curIndex - 1).getParent().getDisplayName());
                 mPreviousUnitLbl.setVisibility(View.VISIBLE);
                 mPreviousBtn.setText(R.string.assessment_previous_unit);
             }
@@ -215,37 +216,6 @@ public class CourseUnitNavigationActivity extends CourseBaseActivity implements 
             mPreviousUnitLbl.setVisibility(View.GONE);
         }
     }
-
-    protected void initialize(Bundle arg){
-        super.initialize(arg);
-    }
-
-    @Override
-    public void onSaveInstanceState(Bundle outState) {
-        if( selectedUnit != null )
-            outState.putSerializable(Router.EXTRA_COURSE_UNIT, selectedUnit);
-        super.onSaveInstanceState(outState);
-    }
-
-    protected void restore(Bundle savedInstanceState) {
-        if (savedInstanceState != null) {
-            setCurrentUnit((CourseComponent) savedInstanceState.getSerializable(Router.EXTRA_COURSE_UNIT) );
-        }
-        super.restore(savedInstanceState);
-    }
-
-
-    @Override
-    protected void onStart() {
-        super.onStart();
-    }
-
-
-    protected void onResume() {
-        super.onResume();
-
-    }
-
 
     private void updateDataModel(){
         unitList.clear();
@@ -264,6 +234,7 @@ public class CourseUnitNavigationActivity extends CourseBaseActivity implements 
                              EnumSet.of(BlockType.VIDEO) : EnumSet.allOf(BlockType.class);
         ((CourseComponent) selectedUnit.getRoot()).fetchAllLeafComponents(leaves, types);
         unitList.addAll( leaves );
+        pagerAdapter.notifyDataSetChanged();
 
         ViewPagerDownloadManager.instance.setMainComponent(selectedUnit, unitList);
 
@@ -282,13 +253,11 @@ public class CourseUnitNavigationActivity extends CourseBaseActivity implements 
         onBackPressed();
     }
 
-
-
-
     @Override
     public void onConfigurationChanged(Configuration newConfig) {
         super.onConfigurationChanged(newConfig);
         updateUIForOrientation();
+        environment.getSegment().trackCourseComponentViewed(selectedUnit.getId(), courseData.getCourse().getId());
     }
 
     private void updateUIForOrientation(){
@@ -321,14 +290,13 @@ public class CourseUnitNavigationActivity extends CourseBaseActivity implements 
         public Fragment getItem(int pos) {
             CourseComponent unit = getUnit(pos);
             CourseUnitFragment unitFragment = null;
-            //FIXME - for the video, let's ignore responsive_UI for now
+            //FIXME - for the video, let's ignore studentViewMultiDevice for now
             if ( unit instanceof VideoBlockModel) {
                 CourseUnitVideoFragment fragment = CourseUnitVideoFragment.newInstance((VideoBlockModel)unit);
-
                 unitFragment = fragment;
             }
 
-            else if ( !unit.isResponsiveUI() ){
+            else if ( !unit.isMultiDevice() ){
                 unitFragment = CourseUnitMobileNotSupportedFragment.newInstance(unit);
             }
 
